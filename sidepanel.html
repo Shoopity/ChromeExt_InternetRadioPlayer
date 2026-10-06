@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Extension Side Panel</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header class="panel-header">
+    <h2>My Extension</h2>
+    <div class="search-container">
+      <input 
+        type="search" 
+        id="panel-search" 
+        placeholder="Search..." 
+        aria-label="Search"
+      />
+    </div>
+  </header>
+
+  <main class="panel-content">
+    <div id="search-results" class="results-list"></div>
+    <div id="main-content">
+      <!-- Your existing popup UI elements go here -->
+    </div>
+  </main>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
