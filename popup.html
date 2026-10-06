@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { width: 320px; font-family: sans-serif; padding: 10px; margin: 0; }
+    h3 { margin-top: 0; color: #333; }
+    input { width: 100%; padding: 6px; box-sizing: border-box; margin-bottom: 8px; }
+    button { width: 100%; padding: 8px; background: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
+    button:hover { background: #0056b3; }
+    ul { list-style: none; padding: 0; margin-top: 12px; max-height: 200px; overflow-y: auto; }
+    li { display: flex; justify-content: space-between; align-items: center; padding: 6px; border-bottom: 1px solid #eee; font-size: 13px; }
+    .station-name { flex-grow: 1; cursor: pointer; color: #007bff; text-decoration: underline; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 8px; }
+    .del-btn { background: #dc3545; color: white; border: none; padding: 2px 6px; cursor: pointer; font-size: 11px; }
+    .del-btn:hover { background: #bd2130; }
+  </style>
+</head>
+<body>
+  <h3>My Synced Stations</h3>
+  <input type="text" id="nameInput" placeholder="Station Name (e.g., Jazz FM)">
+  <input type="text" id="urlInput" placeholder="Stream URL (e.g., http://...mp3)">
+  <button id="addBtn">Add & Sync Station</button>
+  <ul id="stationList"></ul>
+  <script src="popup.js"></script>
+</body>
+</html>
