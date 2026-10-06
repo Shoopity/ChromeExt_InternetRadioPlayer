@@ -1,9 +1,22 @@
 {
   "manifest_version": 3,
-  "name": "My Synced Radio Tuner",
+  "name": "Radio Streamer Side Panel",
   "version": "1.0",
-  "permissions": ["storage"],
+  "permissions": [
+    "sidePanel",
+    "offscreen",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://de1.api.radio-browser.info/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "action": {
-    "default_popup": "popup.html"
+    "default_title": "Open Radio Panel"
   }
 }
