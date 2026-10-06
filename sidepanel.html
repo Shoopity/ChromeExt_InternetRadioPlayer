@@ -2,29 +2,90 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Extension Side Panel</title>
-  <link rel="stylesheet" href="sidepanel.css">
+  <title>Radio Player</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 12px;
+      margin: 0;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    h2, h3 {
+      margin-top: 0;
+      margin-bottom: 8px;
+    }
+    .section {
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #ccc;
+    }
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    input {
+      padding: 6px;
+      font-size: 14px;
+    }
+    button {
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .station-name, .search-item-name {
+      cursor: pointer;
+      flex-grow: 1;
+      margin-right: 8px;
+    }
+    .del-btn {
+      color: red;
+      border: none;
+      background: none;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
-  <header class="panel-header">
-    <h2>My Extension</h2>
-    <div class="search-container">
-      <input 
-        type="search" 
-        id="panel-search" 
-        placeholder="Search..." 
-        aria-label="Search"
-      />
-    </div>
-  </header>
 
-  <main class="panel-content">
-    <div id="search-results" class="results-list"></div>
-    <div id="main-content">
-      <!-- Your existing popup UI elements go here -->
+  <!-- Section 1: Search Online Radio API -->
+  <div class="section">
+    <h3>Search Radio Stations</h3>
+    <div class="input-group">
+      <input type="text" id="searchInput" placeholder="Search by station name..." />
+      <button id="searchBtn">Search</button>
     </div>
-  </main>
+    <ul id="searchResults"></ul>
+  </div>
+
+  <!-- Section 2: Add Custom Station Stream URL -->
+  <div class="section">
+    <h3>Add Custom Station</h3>
+    <div class="input-group">
+      <input type="text" id="nameInput" placeholder="Station Name" />
+      <input type="text" id="urlInput" placeholder="Stream URL (http://...)" />
+      <button id="addBtn">Add Station</button>
+    </div>
+  </div>
+
+  <!-- Section 3: Saved / Synced Stations -->
+  <div class="section">
+    <h3>My Stations</h3>
+    <ul id="stationList"></ul>
+  </div>
 
   <script src="sidepanel.js"></script>
 </body>
