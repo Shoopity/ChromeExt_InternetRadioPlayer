@@ -3,8 +3,7 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
 
 const DEFAULT_STATIONS = [
   { name: 'Cladrite Radio', url: 'http://streaming.live365.com/a43564' },
-  { name: 'Conyers 1', url: 'https://s8.yesstreaming.net:17011/stream' },
-  { name: 'Conyers 2', url: 'https://s6.yesstreaming.net:17082/stream' },
+  { name: 'Conyers 2', url: 'https://s6.yesstreaming.net:17082/stream' }
 ];
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
@@ -18,7 +17,17 @@ chrome.runtime.onInstalled.addListener((details) => {
 let commands = Promise.resolve();
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.target !== 'background') return;
-  if (!['play', 'stop', 'getPlaybackState'].includes(message.action)) return;
+  if (sender.url === chrome.runtime.getURL('offscreen.html') && message.action === 'savePodcastProgress') {
+    chrome.storage.local.set({ podcastProgress: message.progress })
+      .then(() => sendResponse({ ok: true }), (error) => sendResponse({ error: error.message }));
+    return true;
+  }
+  if (sender.url === chrome.runtime.getURL('offscreen.html') && message.action === 'clearPodcastProgress') {
+    chrome.storage.local.remove('podcastProgress')
+      .then(() => sendResponse({ ok: true }), (error) => sendResponse({ error: error.message }));
+    return true;
+  }
+  if (!['play', 'playQueue', 'stop', 'getPlaybackState'].includes(message.action)) return;
   const operation = commands.then(() => handleCommand(message));
   commands = operation.catch(() => {});
   operation.then(sendResponse, (error) => sendResponse({ error: error.message }));
@@ -31,7 +40,9 @@ async function handleCommand(message) {
     documentUrls: [chrome.runtime.getURL('offscreen.html')]
   });
   if (!contexts.length) {
-    if (message.action !== 'play') return { state: { url: '', name: '', status: 'stopped', error: '' } };
+    if (!['play', 'playQueue'].includes(message.action)) {
+      return { state: { url: '', name: '', status: 'stopped', error: '' } };
+    }
     await chrome.offscreen.createDocument({
       url: 'offscreen.html', reasons: ['AUDIO_PLAYBACK'],
       justification: 'Play internet radio stream'

@@ -60,6 +60,10 @@
     li { gap: 6px; }
     .station-name, .search-item-name { overflow-wrap: anywhere; min-width: 0; }
     .play-btn { flex-shrink: 0; }
+    .episode-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .episode-details { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 3px; }
+    .episode-date, #feedStatus { color: #555; font-size: 12px; margin: 4px 0 0; }
+    #episodeList li { gap: 10px; }
     .is-playing { background: #edf8f0; }
     .is-loading { background: #fff8e6; }
     .playback-section {
@@ -116,6 +120,26 @@
       <button id="searchBtn">Search</button>
     </div>
     <ul id="searchResults"></ul>
+  </div>
+
+  <div class="section">
+    <h3>Podcast Feed</h3>
+    <div class="input-group">
+      <input type="url" id="feedUrlInput" placeholder="RSS feed URL" />
+      <button id="loadFeedBtn">Load Feed</button>
+      <label for="episodeOrder">Play order</label>
+      <select id="episodeOrder">
+        <option value="oldest">Oldest to newest</option>
+        <option value="newest">Newest to oldest</option>
+      </select>
+      <button id="resumePodcastBtn" hidden></button>
+      <div class="feed-actions">
+        <button type="button" id="toggleEpisodeListBtn" aria-expanded="false">Show episodes</button>
+        <button type="button" id="clearFeedBtn">Clear feed</button>
+      </div>
+    </div>
+    <p id="feedStatus" role="status"></p>
+    <ul id="episodeList" hidden></ul>
   </div>
 
   <!-- Section 2: Add Custom Station Stream URL -->

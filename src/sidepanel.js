@@ -9,6 +9,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('searchInput');
   const searchBtn = document.getElementById('searchBtn');
   const searchResults = document.getElementById('searchResults');
+  const feedUrlInput = document.getElementById('feedUrlInput');
+  const loadFeedBtn = document.getElementById('loadFeedBtn');
+  const episodeOrder = document.getElementById('episodeOrder');
+  const resumePodcastBtn = document.getElementById('resumePodcastBtn');
+  const feedStatus = document.getElementById('feedStatus');
+  const episodeList = document.getElementById('episodeList');
+  const toggleEpisodeListBtn = document.getElementById('toggleEpisodeListBtn');
+  const clearFeedBtn = document.getElementById('clearFeedBtn');
 
   const playbackStatus = document.getElementById('playbackStatus');
   const stopBtn = document.getElementById('stopBtn');
@@ -26,9 +34,10 @@ document.addEventListener('DOMContentLoaded', () => {
     playback = state;
     const active = ['loading', 'playing'].includes(state.status);
     stopBtn.hidden = !active;
-    metadataWatcher.watch(active ? state.url : "");
+    metadataWatcher.watch(active && state.kind !== 'podcast' ? state.url : '');
     playbackStatus.textContent = state.status === 'error' ? state.error
-      : state.status === 'playing' ? `Playing: ${state.name}`
+      : state.status === 'completed' ? 'Podcast playlist finished'
+      : state.status === 'playing' ? `Playing${state.kind === 'podcast' ? ` episode ${state.episodeIndex + 1} of ${state.episodeCount}` : ''}: ${state.name}`
       : state.status === 'loading' ? `Connecting: ${state.name}` : 'No station playing';
     document.querySelectorAll('[data-stream-url]').forEach((row) => {
       const selected = active && row.dataset.streamUrl === state.url;
@@ -58,6 +67,181 @@ document.addEventListener('DOMContentLoaded', () => {
 
   stopBtn.addEventListener('click', () => command('stop'));
   command('getPlaybackState');
+
+  let feedEpisodes = [];
+  let activeFeedUrl = '';
+  let podcastProgress = null;
+  let episodesCollapsed = true;
+
+  function updateEpisodeListVisibility() {
+    episodeList.hidden = episodesCollapsed;
+    toggleEpisodeListBtn.textContent = `${episodesCollapsed ? 'Show' : 'Hide'} episodes${feedEpisodes.length ? ` (${feedEpisodes.length})` : ''}`;
+    toggleEpisodeListBtn.setAttribute('aria-expanded', String(!episodesCollapsed));
+  }
+
+  function orderedEpisodes() {
+    const episodes = [...feedEpisodes];
+    if (episodes.every((episode) => Number.isFinite(Date.parse(episode.published)))) {
+      episodes.sort((left, right) => {
+        const difference = Date.parse(left.published) - Date.parse(right.published);
+        return episodeOrder.value === 'oldest' ? difference : -difference;
+      });
+    } else if (episodeOrder.value === 'newest') {
+      episodes.reverse();
+    }
+    return episodes;
+  }
+
+  function progressEpisode(episodes = orderedEpisodes()) {
+    if (!podcastProgress || podcastProgress.feedUrl !== activeFeedUrl) return -1;
+    return episodes.findIndex((episode) => episode.id === podcastProgress.episodeId);
+  }
+
+  function updateResumeButton(episodes = orderedEpisodes()) {
+    const index = progressEpisode(episodes);
+    resumePodcastBtn.hidden = index < 0;
+    if (index >= 0) resumePodcastBtn.textContent = `Resume: ${episodes[index].title}`;
+    Array.from(episodeList.children).forEach((row, episodeIndex) => {
+      row.querySelector('button').textContent = episodeIndex === index ? 'Resume' : 'Play';
+    });
+  }
+
+  function startPodcast(index, position = 0) {
+    const episodes = orderedEpisodes();
+    if (!episodes[index]) return;
+    const savedPosition = progressEpisode(episodes) === index ? (podcastProgress.currentTime || 0) : 0;
+    command('playQueue', {
+      feedUrl: activeFeedUrl,
+      queue: episodes.map(({ id, title, url }) => ({ id, title, url })),
+      index,
+      position: position || savedPosition
+    });
+  }
+
+  function renderEpisodes() {
+    const episodes = orderedEpisodes();
+    episodeList.replaceChildren();
+    episodes.forEach((episode, index) => {
+      const row = document.createElement('li');
+      const details = document.createElement('span');
+      details.className = 'episode-details';
+      const title = document.createElement('span');
+      title.className = 'episode-title';
+      title.textContent = episode.title;
+      details.appendChild(title);
+      if (episode.published) {
+        const date = document.createElement('span');
+        date.className = 'episode-date';
+        date.textContent = new Date(episode.published).toLocaleDateString();
+        details.appendChild(date);
+      }
+      const playButton = document.createElement('button');
+      playButton.textContent = progressEpisode(episodes) === index ? 'Resume' : 'Play';
+      playButton.addEventListener('click', () => startPodcast(index));
+      row.append(details, playButton);
+      episodeList.appendChild(row);
+    });
+    updateResumeButton(episodes);
+    updateEpisodeListVisibility();
+  }
+
+  function feedChildText(node, name) {
+    return Array.from(node.children).find((child) => child.localName === name)?.textContent.trim() || '';
+  }
+
+  function parseFeed(xmlText, baseUrl) {
+    const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
+    if (xml.querySelector('parsererror')) throw new Error('This URL did not return valid RSS or XML.');
+    const items = Array.from(xml.getElementsByTagName('*')).filter((node) => node.localName === 'item');
+    const episodes = items.flatMap((item) => {
+      const media = Array.from(item.children).find((child) =>
+        (child.localName === 'enclosure' && child.hasAttribute('url')) ||
+        (child.localName === 'content' && child.hasAttribute('url')) ||
+        (child.localName === 'link' && child.getAttribute('rel') === 'enclosure' && child.hasAttribute('href'))
+      );
+      if (!media) return [];
+      const mediaUrl = media.getAttribute('url') || media.getAttribute('href');
+      const title = feedChildText(item, 'title') || 'Untitled episode';
+      const id = feedChildText(item, 'guid') || mediaUrl;
+      return [{ id, title, url: new URL(mediaUrl, baseUrl).href, published: feedChildText(item, 'pubDate') }];
+    });
+    if (!episodes.length) throw new Error('No playable audio episodes were found in this feed.');
+    const channel = Array.from(xml.getElementsByTagName('*')).find((node) => node.localName === 'channel');
+    return { title: channel ? feedChildText(channel, 'title') : '', episodes };
+  }
+
+  async function loadPodcastFeed(url = feedUrlInput.value.trim()) {
+    let feedUrl;
+    try {
+      feedUrl = new URL(url);
+      if (!['http:', 'https:'].includes(feedUrl.protocol)) throw new Error();
+    } catch {
+      feedStatus.textContent = 'Enter a valid HTTP or HTTPS RSS feed URL.';
+      return;
+    }
+    const normalizedUrl = feedUrl.href;
+    loadFeedBtn.disabled = true;
+    feedStatus.textContent = 'Loading feed...';
+    try {
+      const response = await fetch(normalizedUrl);
+      if (!response.ok) throw new Error(`Feed request failed (${response.status}).`);
+      const parsed = parseFeed(await response.text(), normalizedUrl);
+      activeFeedUrl = normalizedUrl;
+      feedUrlInput.value = normalizedUrl;
+      feedEpisodes = parsed.episodes;
+      podcastProgress = (await chrome.storage.local.get('podcastProgress')).podcastProgress || null;
+      await chrome.storage.local.set({ podcastFeedUrl: normalizedUrl });
+      feedStatus.textContent = `${parsed.title || 'Podcast feed'} · ${feedEpisodes.length} episodes`;
+      renderEpisodes();
+    } catch (error) {
+      feedEpisodes = [];
+      episodeList.replaceChildren();
+      resumePodcastBtn.hidden = true;
+      feedStatus.textContent = `Unable to load feed: ${error.message}`;
+    } finally {
+      loadFeedBtn.disabled = false;
+    }
+  }
+
+  loadFeedBtn.addEventListener('click', () => loadPodcastFeed());
+  feedUrlInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') loadPodcastFeed();
+  });
+  episodeOrder.addEventListener('change', renderEpisodes);
+  toggleEpisodeListBtn.addEventListener('click', () => {
+    episodesCollapsed = !episodesCollapsed;
+    updateEpisodeListVisibility();
+    chrome.storage.local.set({ podcastEpisodesCollapsed: episodesCollapsed });
+  });
+  clearFeedBtn.addEventListener('click', async () => {
+    feedEpisodes = [];
+    activeFeedUrl = '';
+    feedUrlInput.value = '';
+    episodeList.replaceChildren();
+    resumePodcastBtn.hidden = true;
+    feedStatus.textContent = '';
+    await chrome.storage.local.remove('podcastFeedUrl');
+    updateEpisodeListVisibility();
+  });
+  resumePodcastBtn.addEventListener('click', () => {
+    const index = progressEpisode();
+    if (index >= 0) startPodcast(index, podcastProgress.currentTime || 0);
+  });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.podcastProgress) {
+      podcastProgress = changes.podcastProgress.newValue || null;
+      updateResumeButton();
+    }
+  });
+  chrome.storage.local.get(['podcastFeedUrl', 'podcastProgress', 'podcastEpisodesCollapsed']).then((saved) => {
+    podcastProgress = saved.podcastProgress || null;
+    episodesCollapsed = saved.podcastEpisodesCollapsed !== false;
+    updateEpisodeListVisibility();
+    if (saved.podcastFeedUrl) {
+      feedUrlInput.value = saved.podcastFeedUrl;
+      loadPodcastFeed(saved.podcastFeedUrl);
+    }
+  });
 
   function playStation(station) {
     nameInput.value = station.name;
