@@ -8,17 +8,30 @@
     "storage"
   ],
   "host_permissions": [
+    "https://de1.api.radio-browser.info/*"
+  ],
+  "optional_host_permissions": [
     "http://*/*",
     "https://*/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "side_panel": {
     "default_path": "sidepanel.html"
   },
   "action": {
-    "default_title": "Open Radio Panel"
+    "default_title": "Open Radio Panel",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
   },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6gEVMo5DIv/c8cEj3MbNBy96566iOwtk1112Ms9H3dc5fSWc0U7/o/Z1nW8epyipcW54sfYP8LRFh748iPo8WqQlxj81MBM45fKN471+AHUlkyYP3zmwk8IvAtWHWT8P5gDa+Ndbym1kvd6AZHZEUoD/EIupE1XGuxSjCkpyxuFMIldWOuTTPaSOnkq22LhVnYi7ecynMxD/rSMDNMbSI+X3W57fD97BplgdQGiB4M9Ce33cdpsku02ah/Wtq25AkMCSgSs3HONW+8Ht+lrGN1ci0c0tT8aMOa5REGGAvf7wjcNKuHAmELLhefkwuTtxQSjlOQg/VTvTUB5oGWkiewIDAQAB"
 }

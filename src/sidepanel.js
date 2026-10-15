@@ -140,6 +140,26 @@ document.addEventListener('DOMContentLoaded', () => {
     setSyncStatus(`Storage error: ${error.message}`);
   }
 
+  function optionalOriginPattern(url) {
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) return '';
+      return `${parsed.protocol}//${parsed.hostname}/*`;
+    } catch {
+      return '';
+    }
+  }
+
+  function requestHostPermission(url) {
+    const origin = optionalOriginPattern(url);
+    return origin ? chrome.permissions.request({ origins: [origin] }) : Promise.resolve(false);
+  }
+
+  function hasHostPermission(url) {
+    const origin = optionalOriginPattern(url);
+    return origin ? chrome.permissions.contains({ origins: [origin] }) : Promise.resolve(false);
+  }
+
   function updateEpisodeListVisibility() {
     episodeList.hidden = episodesCollapsed;
     toggleEpisodeListBtn.textContent = `${episodesCollapsed ? 'Show' : 'Hide'} episodes${feedEpisodes.length ? ` (${feedEpisodes.length})` : ''}`;
@@ -287,7 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return { title: channel ? feedChildText(channel, 'title') : '', episodes };
   }
 
-  async function loadPodcastFeed(url = feedUrlInput.value.trim()) {
+  async function loadPodcastFeed(url = feedUrlInput.value.trim(), requestPermission = true) {
     let feedUrl;
     try {
       feedUrl = new URL(url);
@@ -300,6 +320,15 @@ document.addEventListener('DOMContentLoaded', () => {
     loadFeedBtn.disabled = true;
     feedStatus.textContent = 'Loading feed...';
     try {
+      const granted = requestPermission
+        ? await requestHostPermission(normalizedUrl)
+        : await hasHostPermission(normalizedUrl);
+      if (!granted) {
+        feedStatus.textContent = requestPermission
+          ? `Access was not granted for ${feedUrl.origin}; the feed was not loaded.`
+          : `Click Load Feed to grant access to ${feedUrl.origin}.`;
+        return;
+      }
       const response = await fetch(normalizedUrl);
       if (!response.ok) throw new Error(`Feed request failed (${response.status}).`);
       const parsed = parseFeed(await response.text(), normalizedUrl);
@@ -379,7 +408,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateEpisodeListVisibility();
     if (saved.podcastFeedUrl) {
       feedUrlInput.value = saved.podcastFeedUrl;
-      loadPodcastFeed(saved.podcastFeedUrl);
+      loadPodcastFeed(saved.podcastFeedUrl, false);
     }
   });
   chrome.storage.sync.get(['podcastFeeds']).then((saved) => {
@@ -391,6 +420,15 @@ document.addEventListener('DOMContentLoaded', () => {
     nameInput.value = station.name;
     urlInput.value = station.url;
     command('play', station);
+    requestHostPermission(station.url).then((granted) => {
+      if (playback.url !== station.url || !['loading', 'playing'].includes(playback.status)) return;
+      if (granted) {
+        metadataWatcher.watch('');
+        metadataWatcher.watch(station.url);
+      } else {
+        nowPlaying.textContent = 'Grant site access to read track information; audio playback can continue.';
+      }
+    }).catch(() => {});
   }
 
   function addPlaybackControls(row, station) {
@@ -439,13 +477,22 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Helper to append a single station to storage
-  function saveStation(newStation) {
+  async function saveStation(newStation) {
+    let metadataAccess = false;
+    try {
+      metadataAccess = await requestHostPermission(newStation.url);
+    } catch {
+      metadataAccess = false;
+    }
     chrome.storage.sync.get(['radioStations']).then((result) => {
       const stations = result.radioStations || [];
       stations.push(newStation);
       return chrome.storage.sync.set({ radioStations: stations }).then(() => {
         renderSavedStations(stations);
-        setSyncStatus(`Saved ${stations.length} station${stations.length === 1 ? '' : 's'}.`);
+        const accessMessage = metadataAccess
+          ? ''
+          : ' Site access was not granted; audio can play, but track information may be unavailable.';
+        setSyncStatus(`Saved ${stations.length} station${stations.length === 1 ? '' : 's'}.${accessMessage}`);
       });
     }).catch(showSyncError);
   }
