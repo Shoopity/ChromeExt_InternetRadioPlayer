@@ -12,11 +12,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 1. Initial Load of Saved Stations
   loadSavedStations();
+  loadCurrentStation();
 
   function loadSavedStations() {
     chrome.storage.sync.get(['radioStations'], (result) => {
       const stations = result.radioStations || [];
       renderSavedStations(stations);
+    });
+  }
+
+  function loadCurrentStation() {
+    chrome.storage.local.get(['currentRadioStation'], (result) => {
+      const station = result.currentRadioStation;
+      if (!station) return;
+
+      nameInput.value = station.name;
+      urlInput.value = station.url;
     });
   }
 
@@ -53,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
       span.className = 'station-name';
       span.textContent = station.name;
       span.title = `Click to play: ${station.url}`;
-      span.addEventListener('click', () => playStation(station.url));
+      span.addEventListener('click', () => playStation(station.name, station.url));
 
       const delBtn = document.createElement('button');
       delBtn.className = 'del-btn';
@@ -113,7 +124,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // Play direct button
       const playBtn = document.createElement('button');
       playBtn.textContent = '▶';
-      playBtn.addEventListener('click', () => playStation(item.url_resolved || item.url));
+      playBtn.addEventListener('click', () =>
+        playStation(item.name, item.url_resolved || item.url)
+      );
 
       // Add to favorites button
       const addFavBtn = document.createElement('button');
@@ -130,7 +143,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Send message to background service worker to trigger offscreen audio
-  function playStation(streamUrl) {
+  function playStation(name, streamUrl) {
+    nameInput.value = name;
+    urlInput.value = streamUrl;
+    chrome.storage.local.set({ currentRadioStation: { name, url: streamUrl } });
     chrome.runtime.sendMessage({ action: "play", url: streamUrl });
   }
 });
