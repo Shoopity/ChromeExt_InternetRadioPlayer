@@ -1,43 +1,41 @@
-// Open side panel when action icon is clicked
-chrome.sidePanel
-  .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch((e) => console.error("Error setting panel behavior: ", e));
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+  .catch((error) => console.error('Panel setup failed:', error));
 
-// Handle default stations on installation
 const DEFAULT_STATIONS = [
-  { name: "New York NY", url: "https://icecast.walmradio.com:8443/classic" },
-  { name: "Adroit Jazz Underground", url: "https://icecast.walmradio.com:8443/jazz" }
+  { name: 'Cladrite Radio', url: 'http://streaming.live365.com/a43564' },
+  { name: 'Conyers 1', url: 'https://s8.yesstreaming.net:17011/stream' },
+  { name: 'Conyers 2', url: 'https://s6.yesstreaming.net:17082/stream' },
 ];
-
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
     chrome.storage.sync.get(['radioStations'], (result) => {
-      if (!result.radioStations) {
-        chrome.storage.sync.set({ radioStations: DEFAULT_STATIONS });
-      }
+      if (!result.radioStations) chrome.storage.sync.set({ radioStations: DEFAULT_STATIONS });
     });
   }
 });
 
-// Audio message routing via Offscreen Document
-chrome.runtime.onMessage.addListener(async (message) => {
-  if (message.action === "play") {
-    await ensureOffscreenDocument();
-    chrome.runtime.sendMessage({ action: "startAudio", url: message.url });
-  } else if (message.action === "stop") {
-    chrome.runtime.sendMessage({ action: "stopAudio" });
-  }
+// Serialize commands so a rapid Stop or station switch cannot overtake Play.
+let commands = Promise.resolve();
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.target !== 'background') return;
+  if (!['play', 'stop', 'getPlaybackState'].includes(message.action)) return;
+  const operation = commands.then(() => handleCommand(message));
+  commands = operation.catch(() => {});
+  operation.then(sendResponse, (error) => sendResponse({ error: error.message }));
+  return true;
 });
 
-async function ensureOffscreenDocument() {
-  const existingContexts = await chrome.runtime.getContexts({
-    contextTypes: ["OFFSCREEN_DOCUMENT"]
+async function handleCommand(message) {
+  const contexts = await chrome.runtime.getContexts({
+    contextTypes: ['OFFSCREEN_DOCUMENT'],
+    documentUrls: [chrome.runtime.getURL('offscreen.html')]
   });
-  if (existingContexts.length === 0) {
+  if (!contexts.length) {
+    if (message.action !== 'play') return { state: { url: '', name: '', status: 'stopped', error: '' } };
     await chrome.offscreen.createDocument({
-      url: "offscreen.html",
-      reasons: ["AUDIO_PLAYBACK"],
-      justification: "Play internet radio stream"
+      url: 'offscreen.html', reasons: ['AUDIO_PLAYBACK'],
+      justification: 'Play internet radio stream'
     });
   }
+  return chrome.runtime.sendMessage({ ...message, target: 'offscreen' });
 }

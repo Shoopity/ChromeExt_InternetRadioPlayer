@@ -57,9 +57,56 @@
       background: none;
       font-weight: bold;
     }
+    li { gap: 6px; }
+    .station-name, .search-item-name { overflow-wrap: anywhere; min-width: 0; }
+    .play-btn { flex-shrink: 0; }
+    .is-playing { background: #edf8f0; }
+    .is-loading { background: #fff8e6; }
+    .playback-section {
+      height: 150px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .playback-details {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+    .playback-status {
+      font-size: 14px;
+      overflow-wrap: anywhere;
+      margin: 0;
+    }
+    .now-playing { margin: 8px 0 0; font-size: 13px; overflow-wrap: anywhere; color: #444; }
+    #stopBtn { align-self: flex-start; flex-shrink: 0; }
+    #stopBtn[hidden] { display: inline-block !important; visibility: hidden; }
+    .equalizer {
+      display: inline-flex; align-items: flex-end; gap: 2px;
+      height: 20px; width: 18px; flex-shrink: 0;
+    }
+    [hidden] { display: none !important; }
+    .equalizer i {
+      display: block; width: 3px; height: 100%; background: #16813e;
+      transform-origin: bottom; animation: equalize 850ms ease-in-out infinite alternate;
+    }
+    .equalizer i:nth-child(2) { animation-delay: -320ms; animation-duration: 640ms; }
+    .equalizer i:nth-child(3) { animation-delay: -560ms; animation-duration: 970ms; }
+    .equalizer i:nth-child(4) { animation-delay: -180ms; animation-duration: 730ms; }
+    @keyframes equalize { from { transform: scaleY(.2); } to { transform: scaleY(1); } }
+    @media (prefers-reduced-motion: reduce) { .equalizer i { animation: none; transform: scaleY(.65); } }
   </style>
 </head>
 <body>
+
+  <div class="section playback-section">
+    <div class="playback-details">
+      <p id="playbackStatus" class="playback-status" role="status">No station playing</p>
+      <p id="nowPlaying" class="now-playing" role="status"></p>
+    </div>
+    <button id="stopBtn" hidden>■ Stop playback</button>
+  </div>
 
   <!-- Section 1: Search Online Radio API -->
   <div class="section">
@@ -87,6 +134,7 @@
     <ul id="stationList"></ul>
   </div>
 
+  <script src="metadata.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>
