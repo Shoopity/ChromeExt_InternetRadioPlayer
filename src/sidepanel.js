@@ -17,6 +17,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const episodeList = document.getElementById('episodeList');
   const toggleEpisodeListBtn = document.getElementById('toggleEpisodeListBtn');
   const clearFeedBtn = document.getElementById('clearFeedBtn');
+  const savedFeedList = document.getElementById('savedFeedList');
+  const syncStatus = document.getElementById('syncStatus');
+  const sectionContainer = document.getElementById('sectionContainer');
+  const toggleToolsBtn = document.getElementById('toggleToolsBtn');
+  const toolsContent = document.getElementById('toolsContent');
+  const toggleSearchBtn = document.getElementById('toggleSearchBtn');
+  const searchContent = document.getElementById('searchContent');
 
   const playbackStatus = document.getElementById('playbackStatus');
   const stopBtn = document.getElementById('stopBtn');
@@ -72,6 +79,66 @@ document.addEventListener('DOMContentLoaded', () => {
   let activeFeedUrl = '';
   let podcastProgress = null;
   let episodesCollapsed = true;
+  let toolsCollapsed = false;
+  let searchCollapsed = false;
+  let savedPodcastFeeds = [];
+
+  function updateSectionMoveButtons() {
+    const sections = Array.from(sectionContainer.querySelectorAll(':scope > .top-section'));
+    sections.forEach((section, index) => {
+      section.querySelector('[data-move="up"]').disabled = index === 0;
+      section.querySelector('[data-move="down"]').disabled = index === sections.length - 1;
+    });
+  }
+
+  function applySectionOrder(order = []) {
+    const sections = new Map(Array.from(sectionContainer.children, (section) => [section.dataset.sectionId, section]));
+    order.forEach((id) => {
+      const section = sections.get(id);
+      if (section) {
+        sectionContainer.appendChild(section);
+        sections.delete(id);
+      }
+    });
+    sections.forEach((section) => sectionContainer.appendChild(section));
+    updateSectionMoveButtons();
+  }
+
+  sectionContainer.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-move]');
+    if (!button) return;
+    const section = button.closest('.top-section');
+    const sections = Array.from(sectionContainer.children);
+    const index = sections.indexOf(section);
+    const target = sections[index + (button.dataset.move === 'up' ? -1 : 1)];
+    if (!target) return;
+    if (button.dataset.move === 'up') sectionContainer.insertBefore(section, target);
+    else sectionContainer.insertBefore(target, section);
+    updateSectionMoveButtons();
+    chrome.storage.local.set({
+      sidePanelSectionOrder: Array.from(sectionContainer.children, (item) => item.dataset.sectionId)
+    }).catch(() => {});
+  });
+
+  function updateToolsVisibility() {
+    toolsContent.hidden = toolsCollapsed;
+    toggleToolsBtn.textContent = toolsCollapsed ? 'Expand' : 'Collapse';
+    toggleToolsBtn.setAttribute('aria-expanded', String(!toolsCollapsed));
+  }
+
+  function updateSearchVisibility() {
+    searchContent.hidden = searchCollapsed;
+    toggleSearchBtn.textContent = searchCollapsed ? 'Expand' : 'Collapse';
+    toggleSearchBtn.setAttribute('aria-expanded', String(!searchCollapsed));
+  }
+
+  function setSyncStatus(detail = '') {
+    syncStatus.textContent = `Chrome Sync uses extension ID ${chrome.runtime.id}. ${detail}`;
+  }
+
+  function showSyncError(error) {
+    setSyncStatus(`Storage error: ${error.message}`);
+  }
 
   function updateEpisodeListVisibility() {
     episodeList.hidden = episodesCollapsed;
@@ -145,6 +212,56 @@ document.addEventListener('DOMContentLoaded', () => {
     updateEpisodeListVisibility();
   }
 
+  function renderSavedFeeds(feeds = savedPodcastFeeds) {
+    savedFeedList.replaceChildren();
+    feeds.forEach((feed, index) => {
+      const row = document.createElement('li');
+      const loadButton = document.createElement('button');
+      loadButton.type = 'button';
+      loadButton.className = 'episode-title';
+      loadButton.textContent = feed.title || feed.url;
+      loadButton.title = feed.url;
+      loadButton.addEventListener('click', () => loadPodcastFeed(feed.url));
+      const removeButton = document.createElement('button');
+      removeButton.type = 'button';
+      removeButton.className = 'del-btn';
+      removeButton.textContent = 'X';
+      removeButton.setAttribute('aria-label', `Remove ${feed.title || feed.url}`);
+      removeButton.addEventListener('click', () => removeSavedFeed(index));
+      row.append(loadButton, removeButton);
+      savedFeedList.appendChild(row);
+    });
+  }
+
+  async function savePodcastFeed(feed) {
+    try {
+      const result = await chrome.storage.sync.get('podcastFeeds');
+      const feeds = result.podcastFeeds || [];
+      const existingIndex = feeds.findIndex((item) => item.url === feed.url);
+      if (existingIndex >= 0) feeds[existingIndex] = feed;
+      else feeds.unshift(feed);
+      await chrome.storage.sync.set({ podcastFeeds: feeds });
+      savedPodcastFeeds = feeds;
+      renderSavedFeeds();
+    } catch (error) {
+      showSyncError(error);
+      feedStatus.textContent += ' Feed loaded, but could not be saved to Chrome Sync.';
+    }
+  }
+
+  async function removeSavedFeed(index) {
+    const feeds = [...savedPodcastFeeds];
+    feeds.splice(index, 1);
+    try {
+      await chrome.storage.sync.set({ podcastFeeds: feeds });
+      savedPodcastFeeds = feeds;
+      renderSavedFeeds();
+      setSyncStatus(`Saved ${feeds.length} podcast feed${feeds.length === 1 ? '' : 's'}.`);
+    } catch (error) {
+      showSyncError(error);
+    }
+  }
+
   function feedChildText(node, name) {
     return Array.from(node.children).find((child) => child.localName === name)?.textContent.trim() || '';
   }
@@ -193,6 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await chrome.storage.local.set({ podcastFeedUrl: normalizedUrl });
       feedStatus.textContent = `${parsed.title || 'Podcast feed'} · ${feedEpisodes.length} episodes`;
       renderEpisodes();
+      await savePodcastFeed({ title: parsed.title || normalizedUrl, url: normalizedUrl });
     } catch (error) {
       feedEpisodes = [];
       episodeList.replaceChildren();
@@ -208,6 +326,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.key === 'Enter') loadPodcastFeed();
   });
   episodeOrder.addEventListener('change', renderEpisodes);
+  toggleToolsBtn.addEventListener('click', () => {
+    toolsCollapsed = !toolsCollapsed;
+    updateToolsVisibility();
+    chrome.storage.local.set({ sidePanelToolsCollapsed: toolsCollapsed }).catch(() => {});
+  });
+  toggleSearchBtn.addEventListener('click', () => {
+    searchCollapsed = !searchCollapsed;
+    updateSearchVisibility();
+    chrome.storage.local.set({ sidePanelSearchCollapsed: searchCollapsed }).catch(() => {});
+  });
   toggleEpisodeListBtn.addEventListener('click', () => {
     episodesCollapsed = !episodesCollapsed;
     updateEpisodeListVisibility();
@@ -232,16 +360,32 @@ document.addEventListener('DOMContentLoaded', () => {
       podcastProgress = changes.podcastProgress.newValue || null;
       updateResumeButton();
     }
+    if (area === 'sync' && changes.podcastFeeds) {
+      savedPodcastFeeds = changes.podcastFeeds.newValue || [];
+      renderSavedFeeds();
+    }
   });
-  chrome.storage.local.get(['podcastFeedUrl', 'podcastProgress', 'podcastEpisodesCollapsed']).then((saved) => {
+  chrome.storage.local.get([
+    'podcastFeedUrl', 'podcastProgress', 'podcastEpisodesCollapsed',
+    'sidePanelSectionOrder', 'sidePanelToolsCollapsed', 'sidePanelSearchCollapsed'
+  ]).then((saved) => {
     podcastProgress = saved.podcastProgress || null;
     episodesCollapsed = saved.podcastEpisodesCollapsed !== false;
+    toolsCollapsed = saved.sidePanelToolsCollapsed === true;
+    searchCollapsed = saved.sidePanelSearchCollapsed === true;
+    applySectionOrder(saved.sidePanelSectionOrder || []);
+    updateToolsVisibility();
+    updateSearchVisibility();
     updateEpisodeListVisibility();
     if (saved.podcastFeedUrl) {
       feedUrlInput.value = saved.podcastFeedUrl;
       loadPodcastFeed(saved.podcastFeedUrl);
     }
   });
+  chrome.storage.sync.get(['podcastFeeds']).then((saved) => {
+    savedPodcastFeeds = saved.podcastFeeds || [];
+    renderSavedFeeds();
+  }).catch(showSyncError);
 
   function playStation(station) {
     nameInput.value = station.name;
@@ -275,10 +419,11 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSavedStations();
 
   function loadSavedStations() {
-    chrome.storage.sync.get(['radioStations'], (result) => {
+    chrome.storage.sync.get(['radioStations']).then((result) => {
       const stations = result.radioStations || [];
       renderSavedStations(stations);
-    });
+      setSyncStatus(`Loaded ${stations.length} station${stations.length === 1 ? '' : 's'}.`);
+    }).catch(showSyncError);
   }
 
   // 2. Add Custom Station
@@ -295,13 +440,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Helper to append a single station to storage
   function saveStation(newStation) {
-    chrome.storage.sync.get(['radioStations'], (result) => {
+    chrome.storage.sync.get(['radioStations']).then((result) => {
       const stations = result.radioStations || [];
       stations.push(newStation);
-      chrome.storage.sync.set({ radioStations: stations }, () => {
+      return chrome.storage.sync.set({ radioStations: stations }).then(() => {
         renderSavedStations(stations);
+        setSyncStatus(`Saved ${stations.length} station${stations.length === 1 ? '' : 's'}.`);
       });
-    });
+    }).catch(showSyncError);
   }
 
   // 3. Render Saved Custom/Favorite Stations
@@ -331,13 +477,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Delete Station
   function deleteStation(index) {
-    chrome.storage.sync.get(['radioStations'], (result) => {
+    chrome.storage.sync.get(['radioStations']).then((result) => {
       const stations = result.radioStations || [];
       stations.splice(index, 1);
-      chrome.storage.sync.set({ radioStations: stations }, () => {
+      return chrome.storage.sync.set({ radioStations: stations }).then(() => {
         renderSavedStations(stations);
       });
-    });
+    }).catch(showSyncError);
   }
 
   // 4. Search Stations via Radio-Browser API

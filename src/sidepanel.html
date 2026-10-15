@@ -20,6 +20,15 @@
       padding-bottom: 15px;
       border-bottom: 1px solid #ccc;
     }
+    #sectionContainer { display: flex; flex-direction: column; }
+    .section-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .section-header h3 { margin: 0; }
+    .section-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .section-actions button { padding: 4px 8px; }
+    .tool-subsection { margin-top: 14px; padding-top: 12px; border-top: 1px solid #ddd; }
+    .tool-subsection h4 { margin: 0 0 8px; }
+    .feed-actions { display: flex; gap: 6px; }
+    #syncStatus { color: #555; font-size: 12px; overflow-wrap: anywhere; }
     .input-group {
       display: flex;
       flex-direction: column;
@@ -49,62 +58,94 @@
     .station-name, .search-item-name {
       cursor: pointer;
       flex-grow: 1;
-      margin-right: 8px;
-    }
-    .del-btn {
-      color: red;
-      border: none;
-      background: none;
-      font-weight: bold;
-    }
-    li { gap: 6px; }
-    .station-name, .search-item-name { overflow-wrap: anywhere; min-width: 0; }
-    .play-btn { flex-shrink: 0; }
-    .episode-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-    .episode-details { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 3px; }
-    .episode-date, #feedStatus { color: #555; font-size: 12px; margin: 4px 0 0; }
-    #episodeList li { gap: 10px; }
-    .is-playing { background: #edf8f0; }
-    .is-loading { background: #fff8e6; }
-    .playback-section {
-      height: 150px;
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .playback-details {
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-    }
-    .playback-status {
-      font-size: 14px;
-      overflow-wrap: anywhere;
-      margin: 0;
-    }
-    .now-playing { margin: 8px 0 0; font-size: 13px; overflow-wrap: anywhere; color: #444; }
-    #stopBtn { align-self: flex-start; flex-shrink: 0; }
-    #stopBtn[hidden] { display: inline-block !important; visibility: hidden; }
-    .equalizer {
-      display: inline-flex; align-items: flex-end; gap: 2px;
-      height: 20px; width: 18px; flex-shrink: 0;
-    }
-    [hidden] { display: none !important; }
-    .equalizer i {
-      display: block; width: 3px; height: 100%; background: #16813e;
-      transform-origin: bottom; animation: equalize 850ms ease-in-out infinite alternate;
-    }
-    .equalizer i:nth-child(2) { animation-delay: -320ms; animation-duration: 640ms; }
-    .equalizer i:nth-child(3) { animation-delay: -560ms; animation-duration: 970ms; }
-    .equalizer i:nth-child(4) { animation-delay: -180ms; animation-duration: 730ms; }
-    @keyframes equalize { from { transform: scaleY(.2); } to { transform: scaleY(1); } }
-    @media (prefers-reduced-motion: reduce) { .equalizer i { animation: none; transform: scaleY(.65); } }
-  </style>
-</head>
-<body>
+      <body>
+        <main id="sectionContainer">
+          <section class="section top-section" data-section-id="playback">
+            <header class="section-header">
+              <h3>Now Playing</h3>
+              <div class="section-actions">
+                <button type="button" data-move="up" aria-label="Move Now Playing section up" title="Move up">↑</button>
+                <button type="button" data-move="down" aria-label="Move Now Playing section down" title="Move down">↓</button>
+              </div>
+            </header>
+            <div class="playback-section">
+              <div class="playback-details">
+                <p id="playbackStatus" class="playback-status" role="status">No station playing</p>
+                <p id="nowPlaying" class="now-playing" role="status"></p>
+              </div>
+              <button id="stopBtn" hidden>■ Stop playback</button>
+            </div>
+          </section>
 
-  <div class="section playback-section">
+          <section class="section top-section" data-section-id="tools">
+            <header class="section-header">
+              <h3>Search &amp; Add Stations</h3>
+              <div class="section-actions">
+                <button type="button" id="toggleToolsBtn" aria-expanded="true">Collapse</button>
+                <button type="button" data-move="up" aria-label="Move Search and Add section up" title="Move up">↑</button>
+                <button type="button" data-move="down" aria-label="Move Search and Add section down" title="Move down">↓</button>
+              </div>
+            </header>
+            <div id="toolsContent">
+              <section class="tool-subsection" aria-labelledby="searchSectionTitle">
+                <header class="section-header">
+                  <h4 id="searchSectionTitle">Search Radio Stations</h4>
+                  <button type="button" id="toggleSearchBtn" aria-expanded="true">Collapse</button>
+                </header>
+                <div id="searchContent">
+                  <div class="input-group">
+                    <input type="text" id="searchInput" placeholder="Search by station name..." />
+                    <button id="searchBtn">Search</button>
+                  </div>
+                  <ul id="searchResults"></ul>
+                </div>
+              </section>
+
+              <section class="tool-subsection" aria-labelledby="podcastSectionTitle">
+                <h4 id="podcastSectionTitle">Podcast Feed</h4>
+                <div class="input-group">
+                  <input type="url" id="feedUrlInput" placeholder="RSS feed URL" />
+                  <button id="loadFeedBtn">Load Feed</button>
+                  <label for="episodeOrder">Play order</label>
+                  <select id="episodeOrder">
+                    <option value="oldest">Oldest to newest</option>
+                    <option value="newest">Newest to oldest</option>
+                  </select>
+                  <button id="resumePodcastBtn" hidden></button>
+                  <div class="feed-actions">
+                    <button type="button" id="toggleEpisodeListBtn" aria-expanded="false">Show episodes</button>
+                    <button type="button" id="clearFeedBtn">Clear feed</button>
+                  </div>
+                </div>
+                <p id="feedStatus" role="status"></p>
+                <ul id="episodeList" hidden></ul>
+                <h4>Saved Feeds</h4>
+                <ul id="savedFeedList"></ul>
+              </section>
+
+              <section class="tool-subsection" aria-labelledby="customStationTitle">
+                <h4 id="customStationTitle">Add Custom Station</h4>
+                <div class="input-group">
+                  <input type="text" id="nameInput" placeholder="Station Name" />
+                  <input type="text" id="urlInput" placeholder="Stream URL (http://...)" />
+                  <button id="addBtn">Add Station</button>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section class="section top-section" data-section-id="stations">
+            <header class="section-header">
+              <h3>My Stations</h3>
+              <div class="section-actions">
+                <button type="button" data-move="up" aria-label="Move My Stations section up" title="Move up">↑</button>
+                <button type="button" data-move="down" aria-label="Move My Stations section down" title="Move down">↓</button>
+              </div>
+            </header>
+            <p id="syncStatus" role="status">Checking Chrome Sync…</p>
+            <ul id="stationList"></ul>
+          </section>
+        </main>
     <div class="playback-details">
       <p id="playbackStatus" class="playback-status" role="status">No station playing</p>
       <p id="nowPlaying" class="now-playing" role="status"></p>
