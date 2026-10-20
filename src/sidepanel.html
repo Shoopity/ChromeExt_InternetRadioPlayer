@@ -7,13 +7,20 @@
     body { font-family: sans-serif; padding: 12px; margin: 0; width: 100%; box-sizing: border-box; }
     h2, h3 { margin-top: 0; margin-bottom: 8px; }
     h4 { margin: 0 0 8px; }
-    .section { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #ccc; }
+    .section { margin-bottom: 16px; padding: 14px; border: 1px solid #d7dfdc; border-left: 4px solid #16813e; border-radius: 6px; background: #f3f8f5; }
+    .section[data-section-id="tools"] { border-color: #d8dce8; border-left-color: #4f628f; background: #f5f6fa; }
+    .section[data-section-id="stations"] { border-color: #e8deca; border-left-color: #b77a23; background: #fff9ef; }
     #sectionContainer { display: flex; flex-direction: column; }
     .section-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .section-header h3, .section-header h4 { margin: 0; }
     .section-actions, .feed-actions { display: flex; gap: 4px; flex-shrink: 0; }
     .section-actions button, .feed-actions button { padding: 4px 8px; }
-    .tool-subsection { margin-top: 14px; padding-top: 12px; border-top: 1px solid #ddd; }
+    .tool-subsection { margin-top: 12px; padding: 10px; border: 1px solid #dfe2e9; border-radius: 4px; background: #fff; }
+    .tool-subsection h4 { color: #34425f; }
+    #searchSectionTitle { color: #243a71; }
+    #podcastSectionTitle { color: #7d561c; }
+    #customStationTitle { color: #286447; }
+    .subsection-heading { margin: 16px 0 6px; padding-top: 12px; border-top: 1px solid #e8deca; color: #79531e; }
     .input-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
     input { padding: 6px; font-size: 14px; }
     button { padding: 6px 12px; cursor: pointer; }
@@ -24,6 +31,10 @@
     .play-btn { flex-shrink: 0; }
     .episode-title { flex: 1; min-width: 0; overflow-wrap: anywhere; text-align: left; }
     .episode-details { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 3px; }
+    .saved-feed-row { display: block; }
+    .saved-feed-controls { display: flex; align-items: center; gap: 6px; }
+    .saved-feed-controls .episode-title { text-align: left; }
+    #episodeList { margin-top: 6px; padding-left: 10px; border-left: 2px solid #dfe2e9; }
     .episode-date, #feedStatus, #syncStatus { color: #555; font-size: 12px; margin: 4px 0 0; overflow-wrap: anywhere; }
     #episodeList li { gap: 10px; }
     .is-playing { background: #edf8f0; }
@@ -80,6 +91,11 @@
           </header>
           <div id="searchContent">
             <div class="input-group">
+              <label for="radioSearchServer">Station directory</label>
+              <select id="radioSearchServer">
+                <option value="https://all.api.radio-browser.info">Radio Browser (automatic)</option>
+                <option value="https://de1.api.radio-browser.info">Radio Browser (direct server)</option>
+              </select>
               <input type="text" id="searchInput" placeholder="Search by station name..." />
               <button id="searchBtn">Search</button>
             </div>
@@ -91,22 +107,25 @@
           <h4 id="podcastSectionTitle">Podcast Feed</h4>
           <div class="input-group">
             <input type="url" id="feedUrlInput" placeholder="RSS feed URL" />
-            <button id="loadFeedBtn">Load Feed</button>
+            <button id="loadFeedBtn">Search Feed</button>
+            <button id="saveFeedBtn" hidden>Save Feed</button>
             <label for="episodeOrder">Play order</label>
             <select id="episodeOrder">
               <option value="oldest">Oldest to newest</option>
               <option value="newest">Newest to oldest</option>
             </select>
             <button id="resumePodcastBtn" hidden></button>
-            <div class="feed-actions">
-              <button type="button" id="toggleEpisodeListBtn" aria-expanded="false">Show episodes</button>
-              <button type="button" id="clearFeedBtn">Clear feed</button>
-            </div>
+            <button type="button" id="clearFeedBtn">Clear feed</button>
           </div>
           <p id="feedStatus" role="status"></p>
-          <ul id="episodeList" hidden></ul>
-          <h4>Saved Feeds</h4>
-          <ul id="savedFeedList"></ul>
+          <div id="feedResultsHome">
+            <div id="feedResultsPanel">
+              <div class="feed-actions">
+                <button type="button" id="toggleEpisodeListBtn" aria-expanded="false">Show episodes</button>
+              </div>
+              <ul id="episodeList" hidden></ul>
+            </div>
+          </div>
         </section>
 
         <section class="tool-subsection" aria-labelledby="customStationTitle">
@@ -130,6 +149,8 @@
       </header>
       <p id="syncStatus" role="status">Checking Chrome Sync…</p>
       <ul id="stationList"></ul>
+      <h4 class="subsection-heading">Saved Feeds</h4>
+      <ul id="savedFeedList"></ul>
     </section>
   </main>
   <script src="metadata.js"></script>

@@ -8,6 +8,7 @@
     "storage"
   ],
   "host_permissions": [
+    "https://all.api.radio-browser.info/*",
     "https://de1.api.radio-browser.info/*"
   ],
   "optional_host_permissions": [

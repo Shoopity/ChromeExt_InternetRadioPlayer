@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const urlInput = document.getElementById('urlInput');
   const addBtn = document.getElementById('addBtn');
   const stationList = document.getElementById('stationList');
+  const radioSearchServer = document.getElementById('radioSearchServer');
 
   // Radio Search Elements
   const searchInput = document.getElementById('searchInput');
@@ -11,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchResults = document.getElementById('searchResults');
   const feedUrlInput = document.getElementById('feedUrlInput');
   const loadFeedBtn = document.getElementById('loadFeedBtn');
+  const saveFeedBtn = document.getElementById('saveFeedBtn');
   const episodeOrder = document.getElementById('episodeOrder');
   const resumePodcastBtn = document.getElementById('resumePodcastBtn');
   const feedStatus = document.getElementById('feedStatus');
@@ -18,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggleEpisodeListBtn = document.getElementById('toggleEpisodeListBtn');
   const clearFeedBtn = document.getElementById('clearFeedBtn');
   const savedFeedList = document.getElementById('savedFeedList');
+  const feedResultsHome = document.getElementById('feedResultsHome');
+  const feedResultsPanel = document.getElementById('feedResultsPanel');
   const syncStatus = document.getElementById('syncStatus');
   const sectionContainer = document.getElementById('sectionContainer');
   const toggleToolsBtn = document.getElementById('toggleToolsBtn');
@@ -77,6 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let feedEpisodes = [];
   let activeFeedUrl = '';
+  let activeFeedTitle = '';
+  let activeFeedIsSaved = false;
   let podcastProgress = null;
   let episodesCollapsed = true;
   let toolsCollapsed = false;
@@ -234,8 +240,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderSavedFeeds(feeds = savedPodcastFeeds) {
     savedFeedList.replaceChildren();
+    activeFeedIsSaved = Boolean(activeFeedUrl && feeds.some((feed) => feed.url === activeFeedUrl));
+    let activeFeedFound = false;
     feeds.forEach((feed, index) => {
       const row = document.createElement('li');
+      row.className = 'saved-feed-row';
+      const controls = document.createElement('div');
+      controls.className = 'saved-feed-controls';
       const loadButton = document.createElement('button');
       loadButton.type = 'button';
       loadButton.className = 'episode-title';
@@ -248,9 +259,16 @@ document.addEventListener('DOMContentLoaded', () => {
       removeButton.textContent = 'X';
       removeButton.setAttribute('aria-label', `Remove ${feed.title || feed.url}`);
       removeButton.addEventListener('click', () => removeSavedFeed(index));
-      row.append(loadButton, removeButton);
+      controls.append(loadButton, removeButton);
+      row.appendChild(controls);
+      if (feed.url === activeFeedUrl && activeFeedIsSaved) {
+        row.appendChild(feedResultsPanel);
+        activeFeedFound = true;
+      }
       savedFeedList.appendChild(row);
     });
+    if (!activeFeedFound) feedResultsHome.appendChild(feedResultsPanel);
+    saveFeedBtn.hidden = !activeFeedUrl || savedPodcastFeeds.some((feed) => feed.url === activeFeedUrl);
   }
 
   async function savePodcastFeed(feed) {
@@ -262,7 +280,9 @@ document.addEventListener('DOMContentLoaded', () => {
       else feeds.unshift(feed);
       await chrome.storage.sync.set({ podcastFeeds: feeds });
       savedPodcastFeeds = feeds;
+      activeFeedIsSaved = activeFeedUrl === feed.url;
       renderSavedFeeds();
+      feedStatus.textContent = `${feed.title || feed.url} saved to My Stations.`;
     } catch (error) {
       showSyncError(error);
       feedStatus.textContent += ' Feed loaded, but could not be saved to Chrome Sync.';
@@ -317,6 +337,15 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     const normalizedUrl = feedUrl.href;
+    activeFeedUrl = '';
+    activeFeedTitle = '';
+    activeFeedIsSaved = false;
+    feedEpisodes = [];
+    episodeList.replaceChildren();
+    resumePodcastBtn.hidden = true;
+    episodesCollapsed = true;
+    updateEpisodeListVisibility();
+    renderSavedFeeds();
     loadFeedBtn.disabled = true;
     feedStatus.textContent = 'Loading feed...';
     try {
@@ -329,17 +358,25 @@ document.addEventListener('DOMContentLoaded', () => {
           : `Click Load Feed to grant access to ${feedUrl.origin}.`;
         return;
       }
-      const response = await fetch(normalizedUrl);
+      let response;
+      try {
+        response = await fetch(normalizedUrl);
+      } catch {
+        throw new Error('The request was blocked or the server could not be reached. Check the URL, network access, and whether it redirects to another host.');
+      }
       if (!response.ok) throw new Error(`Feed request failed (${response.status}).`);
       const parsed = parseFeed(await response.text(), normalizedUrl);
       activeFeedUrl = normalizedUrl;
+      activeFeedTitle = parsed.title || normalizedUrl;
       feedUrlInput.value = normalizedUrl;
       feedEpisodes = parsed.episodes;
+      episodesCollapsed = true;
+      await chrome.storage.local.set({ podcastEpisodesCollapsed: true });
       podcastProgress = (await chrome.storage.local.get('podcastProgress')).podcastProgress || null;
       await chrome.storage.local.set({ podcastFeedUrl: normalizedUrl });
       feedStatus.textContent = `${parsed.title || 'Podcast feed'} · ${feedEpisodes.length} episodes`;
       renderEpisodes();
-      await savePodcastFeed({ title: parsed.title || normalizedUrl, url: normalizedUrl });
+      renderSavedFeeds();
     } catch (error) {
       feedEpisodes = [];
       episodeList.replaceChildren();
@@ -351,8 +388,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   loadFeedBtn.addEventListener('click', () => loadPodcastFeed());
+  feedUrlInput.addEventListener('input', () => {
+    if (feedUrlInput.value.trim() !== activeFeedUrl) saveFeedBtn.hidden = true;
+  });
   feedUrlInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') loadPodcastFeed();
+  });
+  saveFeedBtn.addEventListener('click', () => {
+    if (activeFeedUrl) savePodcastFeed({ title: activeFeedTitle, url: activeFeedUrl });
   });
   episodeOrder.addEventListener('change', renderEpisodes);
   toggleToolsBtn.addEventListener('click', () => {
@@ -373,11 +416,14 @@ document.addEventListener('DOMContentLoaded', () => {
   clearFeedBtn.addEventListener('click', async () => {
     feedEpisodes = [];
     activeFeedUrl = '';
+    activeFeedTitle = '';
+    activeFeedIsSaved = false;
     feedUrlInput.value = '';
     episodeList.replaceChildren();
     resumePodcastBtn.hidden = true;
     feedStatus.textContent = '';
     await chrome.storage.local.remove('podcastFeedUrl');
+    renderSavedFeeds();
     updateEpisodeListVisibility();
   });
   resumePodcastBtn.addEventListener('click', () => {
@@ -396,12 +442,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   chrome.storage.local.get([
     'podcastFeedUrl', 'podcastProgress', 'podcastEpisodesCollapsed',
-    'sidePanelSectionOrder', 'sidePanelToolsCollapsed', 'sidePanelSearchCollapsed'
+    'sidePanelSectionOrder', 'sidePanelToolsCollapsed', 'sidePanelSearchCollapsed', 'radioSearchServer'
   ]).then((saved) => {
     podcastProgress = saved.podcastProgress || null;
     episodesCollapsed = saved.podcastEpisodesCollapsed !== false;
     toolsCollapsed = saved.sidePanelToolsCollapsed === true;
     searchCollapsed = saved.sidePanelSearchCollapsed === true;
+    if (['https://all.api.radio-browser.info', 'https://de1.api.radio-browser.info'].includes(saved.radioSearchServer)) {
+      radioSearchServer.value = saved.radioSearchServer;
+    }
     applySectionOrder(saved.sidePanelSectionOrder || []);
     updateToolsVisibility();
     updateSearchVisibility();
@@ -541,14 +590,18 @@ document.addEventListener('DOMContentLoaded', () => {
     searchResults.innerHTML = '<li>Searching...</li>';
 
     try {
-      const response = await fetch(
-        `https://de1.api.radio-browser.info/json/stations/byname/${encodeURIComponent(query)}?limit=10`
-      );
+      await chrome.storage.local.set({ radioSearchServer: radioSearchServer.value });
+      const response = await fetch(`${radioSearchServer.value}/json/stations/byname/${encodeURIComponent(query)}?limit=10`);
+      if (!response.ok) throw new Error(`Search request failed (${response.status}).`);
       const data = await response.json();
+      if (!Array.isArray(data)) throw new Error('The station directory returned an unexpected response.');
       renderSearchResults(data);
     } catch (err) {
       console.error(err);
-      searchResults.innerHTML = '<li>Failed to load search results.</li>';
+      searchResults.replaceChildren();
+      const message = document.createElement('li');
+      message.textContent = `Search failed: ${err.message}`;
+      searchResults.appendChild(message);
     }
   });
 
