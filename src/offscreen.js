@@ -7,9 +7,37 @@ let feedUrl = '';
 let pendingSeek = null;
 let lastProgressWrite = 0;
 
-function publish() {
-  chrome.runtime.sendMessage({ target: 'panel', action: 'playbackState', state })
+function playbackSnapshot() {
+  return { ...state, queue: [...queue], queueIndex, feedUrl };
+}
+
+function publish(persist = false) {
+  const snapshot = playbackSnapshot();
+  chrome.runtime.sendMessage({ target: 'panel', action: 'playbackState', state: snapshot })
     .catch(() => {}); // Playback also works while no panel is open.
+  if (persist) {
+    chrome.runtime.sendMessage({ target: 'background', action: 'saveLastPlayback', playback: snapshot })
+      .catch(() => {});
+  }
+}
+
+function updateTimeline(persist = false) {
+  if (!player.hasAttribute('src')) return;
+  const ranges = player.seekable;
+  const hasSeekableRange = ranges.length > 0;
+  const rangeIndex = hasSeekableRange ? ranges.length - 1 : -1;
+  const duration = Number.isFinite(player.duration) ? player.duration : null;
+  const podcastIsSeekable = state.kind === 'podcast' && duration > 0 && ranges.length === 1 &&
+    ranges.start(0) <= 0.5 && ranges.end(0) >= duration - 0.5;
+  state = {
+    ...state,
+    currentTime: Number.isFinite(player.currentTime) ? player.currentTime : state.currentTime || 0,
+    duration,
+    seekableStart: hasSeekableRange ? ranges.start(rangeIndex) : null,
+    seekableEnd: hasSeekableRange ? ranges.end(rangeIndex) : null,
+    canSeek: state.kind === 'live' ? hasSeekableRange : podcastIsSeekable
+  };
+  publish(persist);
 }
 
 function disconnect() {
@@ -53,12 +81,44 @@ function startEpisode(index, position = 0) {
     episodeId: episode.id,
     episodeIndex: index,
     episodeCount: queue.length,
-    currentTime: position
+    currentTime: position,
+    duration: null,
+    seekableStart: null,
+    seekableEnd: null,
+    canSeek: false
   };
   saveProgress(true, position);
   player.crossOrigin = 'anonymous';
   player.src = episode.url;
-  publish();
+  publish(true);
+  player.play().catch((error) => {
+    if (request === generation && state.status !== 'error') {
+      fail(`Playback failed: ${error.message}`);
+    }
+  });
+}
+
+function startLive(url, name) {
+  const request = ++generation;
+  disconnect();
+  queue = [];
+  queueIndex = -1;
+  feedUrl = '';
+  state = {
+    url,
+    name: name || 'Radio station',
+    status: 'loading',
+    error: '',
+    kind: 'live',
+    currentTime: 0,
+    duration: null,
+    seekableStart: null,
+    seekableEnd: null,
+    canSeek: false
+  };
+  player.removeAttribute('crossorigin');
+  player.src = url;
+  publish(true);
   player.play().catch((error) => {
     if (request === generation && state.status !== 'error') {
       fail(`Playback failed: ${error.message}`);
@@ -77,27 +137,31 @@ function fail(message) {
 player.addEventListener('playing', () => {
   if (!state.url || player.paused || !player.hasAttribute('src')) return;
   state = { ...state, status: 'playing', error: '' };
-  publish();
+  updateTimeline(true);
 });
 player.addEventListener('loadedmetadata', () => {
-  if (pendingSeek === null || !player.hasAttribute('src')) return;
-  try {
-    player.currentTime = pendingSeek;
-  } catch (error) {
-    console.warn('Unable to restore podcast position:', error);
+  if (pendingSeek !== null && player.hasAttribute('src')) {
+    try {
+      player.currentTime = pendingSeek;
+    } catch (error) {
+      console.warn('Unable to restore podcast position:', error);
+    }
+    pendingSeek = null;
   }
-  pendingSeek = null;
+  updateTimeline();
 });
 player.addEventListener('timeupdate', () => {
-  if (queueIndex < 0) return;
-  state = { ...state, currentTime: player.currentTime };
-  saveProgress();
+  updateTimeline();
+  if (queueIndex >= 0) saveProgress();
 });
+for (const event of ['durationchange', 'progress', 'seeked']) {
+  player.addEventListener(event, () => updateTimeline());
+}
 for (const event of ['waiting', 'stalled']) {
   player.addEventListener(event, () => {
     if (!state.url || !player.hasAttribute('src') || state.status === 'error') return;
     state = { ...state, status: 'loading' };
-    publish();
+    publish(true);
   });
 }
 player.addEventListener('error', () => {
@@ -131,7 +195,7 @@ player.addEventListener('ended', () => {
       queueIndex = -1;
       feedUrl = '';
       state = { url: '', name: lastEpisode.title, status: 'completed', error: '', kind: 'podcast' };
-      publish();
+      publish(true);
     }
     return;
   }
@@ -142,21 +206,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.target !== 'offscreen') return;
   if (message.action === 'play') {
     saveProgress(true);
-    queue = [];
-    queueIndex = -1;
-    feedUrl = '';
-    const request = ++generation;
-    disconnect();
-    state = { url: message.url, name: message.name || 'Radio station', status: 'loading', error: '', kind: 'live' };
-    player.removeAttribute('crossorigin');
-    player.src = message.url;
-    publish();
-    // Do not await play: Stop must work even while a stream is connecting.
-    player.play().catch((error) => {
-      if (request === generation && state.status !== 'error') {
-        fail(`Playback failed: ${error.message}`);
-      }
-    });
+    startLive(message.url, message.name);
   } else if (message.action === 'playQueue') {
     if (!Array.isArray(message.queue) || !message.queue.length || !message.feedUrl) {
       sendResponse({ error: 'The podcast feed has no playable episodes.' });
@@ -165,17 +215,52 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     feedUrl = message.feedUrl;
     queue = message.queue;
     startEpisode(message.index || 0, message.position || 0);
+  } else if (message.action === 'seek') {
+    const target = Number(message.currentTime);
+    if (!Number.isFinite(target) || !state.canSeek || !player.hasAttribute('src')) {
+      sendResponse({ state: playbackSnapshot(), error: 'Seeking is not available for this media.' });
+      return;
+    }
+    const minimum = state.kind === 'live' ? state.seekableStart : 0;
+    const maximum = state.kind === 'live' ? state.seekableEnd : state.duration;
+    try {
+      player.currentTime = Math.max(minimum, Math.min(maximum, target));
+      updateTimeline(true);
+    } catch {
+      state = { ...state, canSeek: false };
+      publish(true);
+    }
+  } else if (message.action === 'goLive') {
+    if (state.kind === 'live' && state.canSeek && player.hasAttribute('src')) {
+      try {
+        player.currentTime = state.seekableEnd;
+        updateTimeline(true);
+      } catch {
+        state = { ...state, canSeek: false };
+        publish(true);
+      }
+    }
+  } else if (message.action === 'resume') {
+    if (!state.url && message.playback?.url) {
+      state = message.playback;
+      queue = Array.isArray(message.playback.queue) ? message.playback.queue : [];
+      queueIndex = Number.isInteger(message.playback.queueIndex) ? message.playback.queueIndex : -1;
+      feedUrl = message.playback.feedUrl || '';
+    }
+    if (state.kind === 'podcast' && queueIndex >= 0) {
+      startEpisode(queueIndex, state.currentTime || 0);
+    } else if (state.url) {
+      startLive(state.url, state.name);
+    }
   } else if (message.action === 'stop') {
-    saveProgress(true);
+    const position = Number.isFinite(player.currentTime) ? player.currentTime : state.currentTime || 0;
+    saveProgress(true, position);
     generation++;
     disconnect();
-    queue = [];
-    queueIndex = -1;
-    feedUrl = '';
-    state = { url: '', name: '', status: 'stopped', error: '' };
-    publish();
+    state = { ...state, status: 'stopped', error: '', currentTime: position };
+    publish(true);
   } else if (message.action !== 'getPlaybackState') {
     return;
   }
-  sendResponse({ state });
+  sendResponse({ state: playbackSnapshot() });
 });

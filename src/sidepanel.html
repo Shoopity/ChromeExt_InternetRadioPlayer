@@ -39,12 +39,30 @@
     #episodeList li { gap: 10px; }
     .is-playing { background: #edf8f0; }
     .is-loading { background: #fff8e6; }
-    .playback-section { height: 150px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
-    .playback-details { flex: 1; min-height: 0; overflow-y: auto; }
-    .playback-status { font-size: 14px; overflow-wrap: anywhere; margin: 0; }
-    .now-playing { margin: 8px 0 0; font-size: 13px; overflow-wrap: anywhere; color: #444; }
-    #stopBtn { align-self: flex-start; flex-shrink: 0; }
-    #stopBtn[hidden] { display: inline-block !important; visibility: hidden; }
+    .section[data-section-id="playback"] { box-sizing: border-box; height: 220px; min-height: 220px; max-height: 220px; flex: 0 0 220px; overflow: visible; }
+    .section[data-section-id="playback"] > .section-header { height: 26px; }
+    .playback-section { box-sizing: border-box; height: calc(100% - 36px); display: grid; grid-template-rows: 40px 64px 30px; gap: 8px; margin-top: 10px; }
+    .playback-summary, .playback-heading { display: flex; align-items: flex-start; min-width: 0; }
+    .playback-heading { width: 100%; gap: 8px; }
+    .playback-hover-text { position: relative; flex: 1; min-width: 0; outline-offset: 2px; }
+    .playback-status, .now-playing { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; line-height: 20px; max-height: 40px; margin: 0; }
+    .playback-status { font-size: 14px; }
+    .now-playing { font-size: 13px; color: #444; }
+    .playback-full-text { display: none; position: absolute; z-index: 10; top: calc(100% + 4px); left: 0; width: max-content; max-width: min(440px, calc(100vw - 48px)); max-height: 60vh; overflow: auto; padding: 8px; border: 1px solid #87918d; border-radius: 4px; background: #fff; box-shadow: 0 3px 10px #0003; color: #222; font-size: 13px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; user-select: text; }
+    .playback-hover-text:hover .playback-full-text, .playback-hover-text:focus .playback-full-text { display: block; }
+    .playback-media { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 0; }
+    .playback-actions, .seek-buttons { display: flex; align-items: center; gap: 6px; }
+    .playback-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); height: 30px; }
+    .playback-actions > button, .playback-primary > button { box-sizing: border-box; width: 100%; min-width: 0; height: 30px; padding: 5px 2px; font-size: 12px; white-space: nowrap; }
+    .playback-primary { display: grid; min-width: 0; }
+    .playback-primary > button { grid-area: 1 / 1; }
+    .seek-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 8px; }
+    .seek-slider-wrap { position: relative; grid-column: 1; min-width: 0; padding-top: 24px; }
+    .seek-controls input { width: 100%; min-width: 0; padding: 0; }
+    .seek-preview { position: absolute; top: 0; left: 5%; transform: translateX(-50%); padding: 3px 6px; border-radius: 3px; background: #34425f; color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
+    .seek-times { display: flex; justify-content: space-between; grid-column: 1 / -1; color: #555; font-size: 12px; font-variant-numeric: tabular-nums; }
+    #seekUnavailable { margin: 0; color: #555; font-size: 12px; }
+    .playback-actions button, .seek-buttons button { flex-shrink: 0; }
     .equalizer { display: inline-flex; align-items: flex-end; gap: 2px; height: 20px; width: 18px; flex-shrink: 0; }
     [hidden] { display: none !important; }
     .equalizer i { display: block; width: 3px; height: 100%; background: #16813e; transform-origin: bottom; animation: equalize 850ms ease-in-out infinite alternate; }
@@ -66,11 +84,45 @@
         </div>
       </header>
       <div class="playback-section">
-        <div class="playback-details">
-          <p id="playbackStatus" class="playback-status" role="status">No station playing</p>
-          <p id="nowPlaying" class="now-playing" role="status"></p>
+        <div class="playback-summary">
+          <div class="playback-heading">
+            <span id="playbackEqualizer" class="equalizer" hidden aria-hidden="true">
+              <i></i><i></i><i></i><i></i>
+            </span>
+            <div class="playback-hover-text" tabindex="0">
+              <p id="playbackStatus" class="playback-status" role="status">No station playing</p>
+              <span id="playbackStatusFull" class="playback-full-text" role="tooltip"></span>
+            </div>
+          </div>
         </div>
-        <button id="stopBtn" hidden>■ Stop playback</button>
+        <div class="playback-media">
+          <div id="nowPlayingDetails" class="playback-hover-text" tabindex="0">
+            <p id="nowPlaying" class="now-playing" role="status"></p>
+            <span id="nowPlayingFull" class="playback-full-text" role="tooltip"></span>
+          </div>
+          <div id="seekControls" hidden>
+            <div class="seek-controls">
+              <div class="seek-slider-wrap">
+                <output id="seekPreview" class="seek-preview" hidden></output>
+                <input id="playbackSeek" type="range" min="0" max="100" step="1" value="0" aria-label="Playback position">
+              </div>
+              <div class="seek-buttons">
+                <button id="back10Btn" type="button" aria-label="Back 10 seconds" title="Back 10 seconds">-10s</button>
+                <button id="forward10Btn" type="button" aria-label="Forward 10 seconds" title="Forward 10 seconds">+10s</button>
+              </div>
+              <div class="seek-times"><span id="playbackCurrentTime">0:00</span><span id="playbackDuration">0:00</span></div>
+            </div>
+            <p id="seekUnavailable" hidden>Seeking not possible with this stream</p>
+          </div>
+        </div>
+        <div class="playback-actions">
+          <button id="previousEpisodeBtn" type="button" aria-label="Play previous podcast episode" title="Previous episode" disabled>|◀ Previous</button>
+          <button id="nextEpisodeBtn" type="button" aria-label="Play next podcast episode" title="Next episode" disabled>Next ▶|</button>
+          <div class="playback-primary">
+            <button id="resumeBtn" type="button" aria-hidden="true" disabled style="visibility: hidden">▶ Resume</button>
+            <button id="stopBtn" type="button" aria-hidden="true" disabled style="visibility: hidden">■ Stop</button>
+          </div>
+        </div>
       </div>
     </section>
 

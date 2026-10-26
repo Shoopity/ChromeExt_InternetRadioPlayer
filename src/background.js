@@ -27,7 +27,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then(() => sendResponse({ ok: true }), (error) => sendResponse({ error: error.message }));
     return true;
   }
-  if (!['play', 'playQueue', 'stop', 'getPlaybackState'].includes(message.action)) return;
+  if (sender.url === chrome.runtime.getURL('offscreen.html') && message.action === 'saveLastPlayback') {
+    chrome.storage.local.set({ lastPlayback: message.playback })
+      .then(() => sendResponse({ ok: true }), (error) => sendResponse({ error: error.message }));
+    return true;
+  }
+  if (!['play', 'playQueue', 'seek', 'goLive', 'resume', 'stop', 'getPlaybackState'].includes(message.action)) return;
   const operation = commands.then(() => handleCommand(message));
   commands = operation.catch(() => {});
   operation.then(sendResponse, (error) => sendResponse({ error: error.message }));
@@ -40,7 +45,11 @@ async function handleCommand(message) {
     documentUrls: [chrome.runtime.getURL('offscreen.html')]
   });
   if (!contexts.length) {
-    if (!['play', 'playQueue'].includes(message.action)) {
+    if (message.action === 'getPlaybackState') {
+      const { lastPlayback } = await chrome.storage.local.get('lastPlayback');
+      return { state: lastPlayback || { url: '', name: '', status: 'stopped', error: '' } };
+    }
+    if (!['play', 'playQueue', 'resume'].includes(message.action)) {
       return { state: { url: '', name: '', status: 'stopped', error: '' } };
     }
     await chrome.offscreen.createDocument({

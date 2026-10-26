@@ -31,32 +31,103 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const playbackStatus = document.getElementById('playbackStatus');
   const stopBtn = document.getElementById('stopBtn');
+  const previousEpisodeBtn = document.getElementById('previousEpisodeBtn');
+  const nextEpisodeBtn = document.getElementById('nextEpisodeBtn');
+  const resumeBtn = document.getElementById('resumeBtn');
+  const playbackStatusFull = document.getElementById('playbackStatusFull');
+  const playbackEqualizer = document.getElementById('playbackEqualizer');
+  const seekControls = document.getElementById('seekControls');
+  const playbackSeek = document.getElementById('playbackSeek');
+  const playbackCurrentTime = document.getElementById('playbackCurrentTime');
+  const playbackDuration = document.getElementById('playbackDuration');
+  const seekPreview = document.getElementById('seekPreview');
+  const back10Btn = document.getElementById('back10Btn');
+  const forward10Btn = document.getElementById('forward10Btn');
+  const seekUnavailable = document.getElementById('seekUnavailable');
+  const nowPlayingDetails = document.getElementById('nowPlayingDetails');
   const nowPlaying = document.getElementById('nowPlaying');
+  const nowPlayingFull = document.getElementById('nowPlayingFull');
   const metadataWatcher = RadioMetadata.createWatcher((text) => {
     nowPlaying.textContent = text;
+    nowPlayingFull.textContent = text;
   });
   window.addEventListener('pagehide', () => metadataWatcher.stop());
   window.addEventListener('pageshow', () => {
     metadataWatcher.watch(['loading', 'playing'].includes(playback.status) ? playback.url : '');
   });
   let playback = { url: '', name: '', status: 'stopped', error: '' };
+  let isSeeking = false;
+
+  function formatPlaybackTime(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+    const wholeSeconds = Math.floor(seconds);
+    const minutes = Math.floor(wholeSeconds / 60);
+    const remainingSeconds = String(wholeSeconds % 60).padStart(2, '0');
+    if (minutes < 60) return `${minutes}:${remainingSeconds}`;
+    return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}:${remainingSeconds}`;
+  }
 
   function updatePlayback(state) {
+    if (state.url !== playback.url) {
+      isSeeking = false;
+      seekPreview.hidden = true;
+    }
     playback = state;
     const active = ['loading', 'playing'].includes(state.status);
-    stopBtn.hidden = !active;
+    stopBtn.style.visibility = active ? 'visible' : 'hidden';
+    stopBtn.disabled = !active;
+    stopBtn.setAttribute('aria-hidden', String(!active));
+    const canResume = Boolean(state.url) && !active && state.status !== 'completed';
+    resumeBtn.style.visibility = canResume ? 'visible' : 'hidden';
+    resumeBtn.disabled = !canResume;
+    resumeBtn.setAttribute('aria-hidden', String(!canResume));
+    const hasEpisodeQueue = state.kind === 'podcast' && Array.isArray(state.queue) &&
+      Number.isInteger(state.queueIndex) && state.queue.length > 0;
+    previousEpisodeBtn.style.visibility = hasEpisodeQueue ? 'visible' : 'hidden';
+    nextEpisodeBtn.style.visibility = hasEpisodeQueue ? 'visible' : 'hidden';
+    previousEpisodeBtn.disabled = !hasEpisodeQueue || state.queueIndex <= 0;
+    nextEpisodeBtn.disabled = !hasEpisodeQueue || state.queueIndex >= state.queue.length - 1;
+    playbackEqualizer.hidden = state.status !== 'playing';
     metadataWatcher.watch(active && state.kind !== 'podcast' ? state.url : '');
     playbackStatus.textContent = state.status === 'error' ? state.error
       : state.status === 'completed' ? 'Podcast playlist finished'
       : state.status === 'playing' ? `Playing${state.kind === 'podcast' ? ` episode ${state.episodeIndex + 1} of ${state.episodeCount}` : ''}: ${state.name}`
-      : state.status === 'loading' ? `Connecting: ${state.name}` : 'No station playing';
+      : state.status === 'loading' ? `Connecting: ${state.name}`
+      : state.url ? `Stopped: ${state.name}` : 'No station playing';
+    playbackStatusFull.textContent = playbackStatus.textContent;
+
+    const isPodcast = state.kind === 'podcast';
+    const canSeek = Boolean(state.canSeek && active);
+    const showPodcastSeek = isPodcast && canSeek;
+    const showUnavailable = active && !state.canSeek && (state.kind === 'live' || isPodcast);
+    seekControls.hidden = !showPodcastSeek && !showUnavailable;
+    seekUnavailable.hidden = !showUnavailable;
+    seekUnavailable.textContent = isPodcast
+      ? 'Seeking not possible with this file'
+      : 'Seeking not possible with this stream';
+    nowPlayingDetails.hidden = isPodcast;
+    playbackSeek.hidden = !showPodcastSeek;
+    back10Btn.hidden = !showPodcastSeek;
+    forward10Btn.hidden = !showPodcastSeek;
+    if (showPodcastSeek) {
+      const duration = state.duration;
+      const position = Math.max(0, Math.min(duration, state.currentTime || 0));
+      playbackSeek.min = '0';
+      playbackSeek.max = String(Math.max(1, duration));
+      if (!isSeeking) {
+        playbackSeek.value = String(position);
+        playbackCurrentTime.textContent = formatPlaybackTime(position);
+      }
+      playbackDuration.textContent = formatPlaybackTime(duration);
+    }
+
     document.querySelectorAll('[data-stream-url]').forEach((row) => {
-      const selected = active && row.dataset.streamUrl === state.url;
+      const selected = Boolean(state.url) && row.dataset.streamUrl === state.url;
       row.classList.toggle('is-playing', selected && state.status === 'playing');
       row.classList.toggle('is-loading', selected && state.status === 'loading');
       const button = row.querySelector('.play-btn');
-      button.textContent = selected ? '■ Stop' : '▶ Play';
-      button.setAttribute('aria-label', `${selected ? 'Stop' : 'Play'} ${row.dataset.stationName}`);
+      button.textContent = selected && active ? '■ Stop' : '▶ Play';
+      button.setAttribute('aria-label', `${selected && active ? 'Stop' : 'Play'} ${row.dataset.stationName}`);
       row.querySelector('.equalizer').hidden = !(selected && state.status === 'playing');
     });
   }
@@ -77,6 +148,54 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   stopBtn.addEventListener('click', () => command('stop'));
+  function playAdjacentEpisode(index) {
+    if (!Array.isArray(playback.queue) || !playback.feedUrl) return;
+    command('playQueue', {
+      feedUrl: playback.feedUrl,
+      queue: playback.queue,
+      index,
+      position: 0
+    });
+  }
+  previousEpisodeBtn.addEventListener('click', () => playAdjacentEpisode(playback.queueIndex - 1));
+  nextEpisodeBtn.addEventListener('click', () => playAdjacentEpisode(playback.queueIndex + 1));
+  resumeBtn.addEventListener('click', () => command('resume', { playback }));
+  function updateSeekPreview() {
+    const target = Number(playbackSeek.value);
+    const range = Number(playbackSeek.max) - Number(playbackSeek.min);
+    const ratio = range > 0 ? (target - Number(playbackSeek.min)) / range : 0;
+    seekPreview.value = formatPlaybackTime(target);
+    seekPreview.style.left = `${5 + Math.max(0, Math.min(1, ratio)) * 90}%`;
+    seekPreview.hidden = false;
+    playbackCurrentTime.textContent = formatPlaybackTime(target);
+  }
+  function commitSeek() {
+    if (!isSeeking) return;
+    isSeeking = false;
+    seekPreview.hidden = true;
+    command('seek', { currentTime: Number(playbackSeek.value) });
+  }
+  playbackSeek.addEventListener('pointerdown', () => {
+    isSeeking = true;
+    updateSeekPreview();
+  });
+  playbackSeek.addEventListener('input', () => {
+    isSeeking = true;
+    updateSeekPreview();
+  });
+  playbackSeek.addEventListener('change', commitSeek);
+  window.addEventListener('pointerup', commitSeek);
+  playbackSeek.addEventListener('pointercancel', () => {
+    isSeeking = false;
+    seekPreview.hidden = true;
+    updatePlayback(playback);
+  });
+  back10Btn.addEventListener('click', () => {
+    command('seek', { currentTime: Math.max(0, (playback.currentTime || 0) - 10) });
+  });
+  forward10Btn.addEventListener('click', () => {
+    command('seek', { currentTime: Math.min(playback.duration, (playback.currentTime || 0) + 10) });
+  });
   command('getPlaybackState');
 
   let feedEpisodes = [];
