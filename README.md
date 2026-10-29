@@ -11,6 +11,7 @@ A Chrome extension for finding and playing internet radio streams, saving statio
 - Load RSS feeds that provide playable audio enclosures. Review episodes before saving the feed; saved feeds appear in **My Stations**.
 - Play episodes in oldest-first or newest-first order, and resume saved playback progress.
 - Show track information when a station exposes Icecast JSON or ICY metadata.
+- Adjust the player's volume and use supported headset or operating-system play/pause controls.
 - Collapse the search tools and search results, and reorder the main panel sections.
 
 ## Install for Testing
@@ -65,6 +66,7 @@ Saved station and feed entries are synchronized through Chrome Sync. Panel layou
 - **Radio search fails:** Switch between **Radio Browser (automatic)** and **Radio Browser (direct server)**. Both use the Radio Browser catalog, and either endpoint can be temporarily unavailable.
 - **A feed does not load:** Check the URL, grant site access when prompted, and confirm the feed contains playable audio enclosures. A site may block extension requests or redirect to another host.
 - **A station will not play:** The stream may be offline or use an audio format unsupported by Chrome.
+- **Headset play/pause does not control playback:** Chrome and the operating system determine which media controls are available. When supported, the player responds to play/pause controls and reflects a paused state in the side panel.
 - **No track information appears:** Many stations do not publish Icecast JSON or ICY metadata. Playback can continue without track information.
 
 ## Project Files

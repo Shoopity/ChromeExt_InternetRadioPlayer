@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchContent = document.getElementById('searchContent');
 
   const playbackStatus = document.getElementById('playbackStatus');
+  const pauseBtn = document.getElementById('pauseBtn');
   const stopBtn = document.getElementById('stopBtn');
   const previousEpisodeBtn = document.getElementById('previousEpisodeBtn');
   const nextEpisodeBtn = document.getElementById('nextEpisodeBtn');
@@ -47,6 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const nowPlayingDetails = document.getElementById('nowPlayingDetails');
   const nowPlaying = document.getElementById('nowPlaying');
   const nowPlayingFull = document.getElementById('nowPlayingFull');
+  const playbackVolume = document.getElementById('playbackVolume');
+  const playbackVolumeValue = document.getElementById('playbackVolumeValue');
   const metadataWatcher = RadioMetadata.createWatcher((text) => {
     nowPlaying.textContent = text;
     nowPlayingFull.textContent = text;
@@ -81,6 +84,10 @@ document.addEventListener('DOMContentLoaded', () => {
     resumeBtn.style.visibility = canResume ? 'visible' : 'hidden';
     resumeBtn.disabled = !canResume;
     resumeBtn.setAttribute('aria-hidden', String(!canResume));
+    const canPause = state.status === 'playing';
+    pauseBtn.style.visibility = canPause ? 'visible' : 'hidden';
+    pauseBtn.disabled = !canPause;
+    pauseBtn.setAttribute('aria-hidden', String(!canPause));
     const hasEpisodeQueue = state.kind === 'podcast' && Array.isArray(state.queue) &&
       Number.isInteger(state.queueIndex) && state.queue.length > 0;
     previousEpisodeBtn.style.visibility = hasEpisodeQueue ? 'visible' : 'hidden';
@@ -93,8 +100,13 @@ document.addEventListener('DOMContentLoaded', () => {
       : state.status === 'completed' ? 'Podcast playlist finished'
       : state.status === 'playing' ? `Playing${state.kind === 'podcast' ? ` episode ${state.episodeIndex + 1} of ${state.episodeCount}` : ''}: ${state.name}`
       : state.status === 'loading' ? `Connecting: ${state.name}`
+      : state.status === 'paused' ? `Paused: ${state.name}`
       : state.url ? `Stopped: ${state.name}` : 'No station playing';
     playbackStatusFull.textContent = playbackStatus.textContent;
+    if (Number.isFinite(state.volume) && document.activeElement !== playbackVolume) {
+      playbackVolume.value = String(state.volume);
+    }
+    playbackVolumeValue.textContent = `${Math.round(Number(playbackVolume.value) * 100)}%`;
 
     const isPodcast = state.kind === 'podcast';
     const canSeek = Boolean(state.canSeek && active);
@@ -126,8 +138,9 @@ document.addEventListener('DOMContentLoaded', () => {
       row.classList.toggle('is-playing', selected && state.status === 'playing');
       row.classList.toggle('is-loading', selected && state.status === 'loading');
       const button = row.querySelector('.play-btn');
-      button.textContent = selected && active ? '■ Stop' : '▶ Play';
-      button.setAttribute('aria-label', `${selected && active ? 'Stop' : 'Play'} ${row.dataset.stationName}`);
+      const resumeSelected = selected && state.status === 'paused';
+      button.textContent = selected && active ? '■ Stop' : resumeSelected ? '▶ Resume' : '▶ Play';
+      button.setAttribute('aria-label', `${selected && active ? 'Stop' : resumeSelected ? 'Resume' : 'Play'} ${row.dataset.stationName}`);
       row.querySelector('.equalizer').hidden = !(selected && state.status === 'playing');
     });
   }
@@ -148,6 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   stopBtn.addEventListener('click', () => command('stop'));
+  pauseBtn.addEventListener('click', () => command('pause'));
   function playAdjacentEpisode(index) {
     if (!Array.isArray(playback.queue) || !playback.feedUrl) return;
     command('playQueue', {
@@ -160,6 +174,10 @@ document.addEventListener('DOMContentLoaded', () => {
   previousEpisodeBtn.addEventListener('click', () => playAdjacentEpisode(playback.queueIndex - 1));
   nextEpisodeBtn.addEventListener('click', () => playAdjacentEpisode(playback.queueIndex + 1));
   resumeBtn.addEventListener('click', () => command('resume', { playback }));
+  playbackVolume.addEventListener('input', () => {
+    playbackVolumeValue.textContent = `${Math.round(Number(playbackVolume.value) * 100)}%`;
+    command('setVolume', { volume: Number(playbackVolume.value) });
+  });
   function updateSeekPreview() {
     const target = Number(playbackSeek.value);
     const range = Number(playbackSeek.max) - Number(playbackSeek.min);
@@ -612,6 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
     button.addEventListener('click', () => {
       const active = ['loading', 'playing'].includes(playback.status) && playback.url === station.url;
       if (active) command('stop');
+      else if (playback.status === 'paused' && playback.url === station.url) command('resume', { playback });
       else playStation(station);
     });
     row.append(equalizer, button);

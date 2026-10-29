@@ -6,13 +6,33 @@ let queueIndex = -1;
 let feedUrl = '';
 let pendingSeek = null;
 let lastProgressWrite = 0;
+let suppressPauseEvent = false;
+let mediaMetadataKey = '';
 
 function playbackSnapshot() {
-  return { ...state, queue: [...queue], queueIndex, feedUrl };
+  return { ...state, volume: player.volume, queue: [...queue], queueIndex, feedUrl };
 }
 
 function publish(persist = false) {
   const snapshot = playbackSnapshot();
+  try {
+    if (navigator.mediaSession) {
+      navigator.mediaSession.playbackState = state.status === 'playing' ? 'playing'
+        : state.status === 'paused' ? 'paused' : 'none';
+      const metadataKey = `${state.url}\u0000${state.name}\u0000${state.kind || ''}`;
+      if (metadataKey !== mediaMetadataKey) {
+        mediaMetadataKey = metadataKey;
+        navigator.mediaSession.metadata = state.url && typeof MediaMetadata !== 'undefined'
+          ? new MediaMetadata({
+            title: state.name,
+            artist: state.kind === 'podcast' ? 'Podcast' : 'Internet Radio'
+          })
+          : null;
+      }
+    }
+  } catch (error) {
+    console.warn('Unable to update system media controls:', error);
+  }
   chrome.runtime.sendMessage({ target: 'panel', action: 'playbackState', state: snapshot })
     .catch(() => {}); // Playback also works while no panel is open.
   if (persist) {
@@ -41,10 +61,37 @@ function updateTimeline(persist = false) {
 }
 
 function disconnect() {
-  player.pause();
+  if (!player.paused) {
+    suppressPauseEvent = true;
+    player.pause();
+  }
   player.removeAttribute('src');
   player.load(); // Abort the request and discard buffered audio.
   pendingSeek = null;
+}
+
+function pausePlayback() {
+  if (!state.url || !player.hasAttribute('src') || player.paused) return;
+  saveProgress(true);
+  player.pause();
+  state = { ...state, status: 'paused', error: '' };
+  updateTimeline(true);
+}
+
+function resumeCurrentPlayback() {
+  if (!state.url) return;
+  if (!player.hasAttribute('src')) {
+    if (state.kind === 'podcast' && queueIndex >= 0) {
+      startEpisode(queueIndex, state.currentTime || 0);
+    } else {
+      startLive(state.url, state.name);
+    }
+    return;
+  }
+  const request = generation;
+  player.play().catch((error) => {
+    if (request === generation && state.status !== 'error') fail(`Playback failed: ${error.message}`);
+  });
 }
 
 function saveProgress(force = false, currentTime = player.currentTime) {
@@ -139,6 +186,16 @@ player.addEventListener('playing', () => {
   state = { ...state, status: 'playing', error: '' };
   updateTimeline(true);
 });
+player.addEventListener('pause', () => {
+  if (suppressPauseEvent) {
+    suppressPauseEvent = false;
+    return;
+  }
+  if (!state.url || !player.hasAttribute('src') || !player.paused || state.status !== 'playing') return;
+  saveProgress(true);
+  state = { ...state, status: 'paused' };
+  updateTimeline(true);
+});
 player.addEventListener('loadedmetadata', () => {
   if (pendingSeek !== null && player.hasAttribute('src')) {
     try {
@@ -204,13 +261,23 @@ player.addEventListener('ended', () => {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.target !== 'offscreen') return;
+  handleMessage(message).then(sendResponse, (error) => {
+    console.error('Unable to handle audio player command:', error);
+    sendResponse({ error: error.message });
+  });
+  return true;
+});
+
+async function handleMessage(message) {
+  if (Number.isFinite(message.volume) && message.volume >= 0 && message.volume <= 1) {
+    player.volume = message.volume;
+  }
   if (message.action === 'play') {
     saveProgress(true);
     startLive(message.url, message.name);
   } else if (message.action === 'playQueue') {
     if (!Array.isArray(message.queue) || !message.queue.length || !message.feedUrl) {
-      sendResponse({ error: 'The podcast feed has no playable episodes.' });
-      return;
+      return { error: 'The podcast feed has no playable episodes.' };
     }
     feedUrl = message.feedUrl;
     queue = message.queue;
@@ -218,8 +285,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.action === 'seek') {
     const target = Number(message.currentTime);
     if (!Number.isFinite(target) || !state.canSeek || !player.hasAttribute('src')) {
-      sendResponse({ state: playbackSnapshot(), error: 'Seeking is not available for this media.' });
-      return;
+      return { state: playbackSnapshot(), error: 'Seeking is not available for this media.' };
     }
     const minimum = state.kind === 'live' ? state.seekableStart : 0;
     const maximum = state.kind === 'live' ? state.seekableEnd : state.duration;
@@ -247,11 +313,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       queueIndex = Number.isInteger(message.playback.queueIndex) ? message.playback.queueIndex : -1;
       feedUrl = message.playback.feedUrl || '';
     }
-    if (state.kind === 'podcast' && queueIndex >= 0) {
-      startEpisode(queueIndex, state.currentTime || 0);
-    } else if (state.url) {
-      startLive(state.url, state.name);
+    if (state.url) {
+      if (state.status === 'paused' && player.hasAttribute('src')) {
+        resumeCurrentPlayback();
+      } else if (state.kind === 'podcast' && queueIndex >= 0) {
+        startEpisode(queueIndex, state.currentTime || 0);
+      } else {
+        startLive(state.url, state.name);
+      }
     }
+  } else if (message.action === 'pause') {
+    pausePlayback();
+  } else if (message.action === 'setVolume') {
+    const volume = Number(message.volume);
+    if (!Number.isFinite(volume) || volume < 0 || volume > 1) {
+      return { error: 'Volume must be between 0 and 1.' };
+    }
+    player.volume = volume;
+    publish();
   } else if (message.action === 'stop') {
     const position = Number.isFinite(player.currentTime) ? player.currentTime : state.currentTime || 0;
     saveProgress(true, position);
@@ -260,7 +339,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     state = { ...state, status: 'stopped', error: '', currentTime: position };
     publish(true);
   } else if (message.action !== 'getPlaybackState') {
-    return;
+    return undefined;
   }
-  sendResponse({ state: playbackSnapshot() });
-});
+  return { state: playbackSnapshot() };
+}
+
+if (navigator.mediaSession) {
+  try {
+    navigator.mediaSession.setActionHandler('play', resumeCurrentPlayback);
+    navigator.mediaSession.setActionHandler('pause', pausePlayback);
+  } catch (error) {
+    console.warn('Unable to register system play/pause controls:', error);
+  }
+}
