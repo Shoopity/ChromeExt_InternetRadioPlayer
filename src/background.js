@@ -39,6 +39,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
+chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+  let senderUrl;
+  try {
+    senderUrl = new URL(sender.url);
+  } catch {
+    return;
+  }
+  if (senderUrl.origin !== 'https://shoopity.github.io' ||
+      !senderUrl.pathname.startsWith('/ChromeExt_InternetRadioPlayer/cast/') ||
+      message.action !== 'pauseLocalForCast') return;
+
+  const operation = commands.then(async () => {
+    const contexts = await chrome.runtime.getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT'],
+      documentUrls: [chrome.runtime.getURL('offscreen.html')]
+    });
+    if (!contexts.length) return { ok: true };
+    const response = await chrome.runtime.sendMessage({ target: 'offscreen', action: 'pause' });
+    if (response?.error) throw new Error(response.error);
+    return { ok: true };
+  });
+  commands = operation.catch(() => {});
+  operation.then(sendResponse, (error) => sendResponse({ error: error.message }));
+  return true;
+});
+
 async function handleCommand(message) {
   const contexts = await chrome.runtime.getContexts({
     contextTypes: ['OFFSCREEN_DOCUMENT'],

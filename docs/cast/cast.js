@@ -1,0 +1,91 @@
+const params = new URLSearchParams(window.location.search);
+const stationUrl = params.get('url') || '';
+const stationName = params.get('name') || 'Internet Radio';
+const extensionId = params.get('extensionId') || '';
+const stationKind = params.get('kind') || 'live';
+const status = document.getElementById('status');
+const station = document.getElementById('station');
+let castInitialized = false;
+
+function isHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+station.textContent = stationUrl && isHttpUrl(stationUrl)
+  ? `Ready to cast: ${stationName}`
+  : 'Open this page from the radio player after selecting a station.';
+
+function onCastApiAvailable(available) {
+  if (!available) {
+    status.textContent = 'Google Cast is unavailable in this browser.';
+    return;
+  }
+  initializeCast();
+}
+
+window.addEventListener('cast-api-available', () => onCastApiAvailable(window.castApiAvailable));
+if (typeof window.castApiAvailable === 'boolean') onCastApiAvailable(window.castApiAvailable);
+
+function initializeCast() {
+  if (castInitialized) return;
+  castInitialized = true;
+  const context = cast.framework.CastContext.getInstance();
+  context.setOptions({
+    receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+    autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+  });
+  context.addEventListener(
+    cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
+    onSessionStateChanged
+  );
+  status.textContent = stationUrl && isHttpUrl(stationUrl)
+    ? 'Select the Cast button to choose a speaker.'
+    : 'No playable station was provided by the radio player.';
+}
+
+async function onSessionStateChanged(event) {
+  if (event.sessionState !== cast.framework.SessionState.SESSION_STARTED &&
+      event.sessionState !== cast.framework.SessionState.SESSION_RESUMED) return;
+  if (!isHttpUrl(stationUrl)) {
+    status.textContent = 'No valid station URL was provided. Close this tab and try again from the player.';
+    return;
+  }
+
+  try {
+    const mediaInfo = new chrome.cast.media.MediaInfo(stationUrl, getContentType(stationUrl));
+    mediaInfo.metadata = new chrome.cast.media.GenericMediaMetadata();
+    mediaInfo.metadata.title = stationName;
+    mediaInfo.metadata.artist = 'Internet Radio';
+    const request = new chrome.cast.media.LoadRequest(mediaInfo);
+    request.currentTime = 0;
+    request.autoplay = true;
+    if (stationKind === 'live') {
+      mediaInfo.streamType = chrome.cast.media.StreamType.LIVE;
+    }
+    await event.session.loadMedia(request);
+    status.textContent = `Casting ${stationName}. Use the speaker or this browser to control playback.`;
+    await pauseLocalPlayer();
+  } catch (error) {
+    status.textContent = `Could not start this stream on the speaker: ${error.message}`;
+  }
+}
+
+function getContentType(value) {
+  const path = new URL(value).pathname.toLowerCase();
+  if (path.endsWith('.m3u8')) return 'application/vnd.apple.mpegurl';
+  if (path.endsWith('.aac')) return 'audio/aac';
+  if (path.endsWith('.ogg') || path.endsWith('.oga')) return 'audio/ogg';
+  if (path.endsWith('.wav')) return 'audio/wav';
+  return 'audio/mpeg';
+}
+
+async function pauseLocalPlayer() {
+  if (!extensionId || !chrome.runtime?.sendMessage) return;
+  const response = await chrome.runtime.sendMessage(extensionId, { action: 'pauseLocalForCast' });
+  if (response?.error) throw new Error(response.error);
+}

@@ -39,9 +39,9 @@
     #episodeList li { gap: 10px; }
     .is-playing { background: #edf8f0; }
     .is-loading { background: #fff8e6; }
-    .section[data-section-id="playback"] { box-sizing: border-box; height: 244px; min-height: 244px; max-height: 244px; flex: 0 0 244px; overflow: visible; }
+    .section[data-section-id="playback"] { box-sizing: border-box; height: 280px; min-height: 280px; max-height: 280px; flex: 0 0 280px; overflow: visible; }
     .section[data-section-id="playback"] > .section-header { height: 26px; }
-    .playback-section { box-sizing: border-box; height: calc(100% - 36px); display: grid; grid-template-rows: 40px 64px 24px 30px; gap: 6px; margin-top: 10px; }
+    .playback-section { box-sizing: border-box; height: calc(100% - 36px); display: grid; grid-template-rows: 40px 64px 24px 30px 30px; gap: 6px; margin-top: 10px; }
     .playback-summary, .playback-heading { display: flex; align-items: flex-start; min-width: 0; }
     .playback-heading { width: 100%; gap: 8px; }
     .playback-hover-text { position: relative; flex: 1; min-width: 0; outline-offset: 2px; }
@@ -132,6 +132,7 @@
             <button id="stopBtn" type="button" aria-hidden="true" disabled style="visibility: hidden">■ Stop</button>
           </div>
         </div>
+        <button id="castBtn" type="button" disabled title="Play a station on a Google Cast device">Cast to speaker</button>
       </div>
     </section>
 

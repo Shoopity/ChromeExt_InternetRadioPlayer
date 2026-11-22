@@ -12,6 +12,7 @@ A Chrome extension for finding and playing internet radio streams, saving statio
 - Play episodes in oldest-first or newest-first order, and resume saved playback progress.
 - Show track information when a station exposes Icecast JSON or ICY metadata.
 - Adjust the player's volume and use supported headset or operating-system play/pause controls.
+- Cast a playing station to a Google Cast speaker.
 - Collapse the search tools and search results, and reorder the main panel sections.
 
 ## Install for Testing
@@ -27,6 +28,16 @@ OR
 Head to `https://chromewebstore.google.com/detail/radio-streamer-side-panel/labghloogapmmlnmjpnbjnbndcdggmfi` and install it from the Chrome Web Store.
 
 The extension uses Manifest V3 and Chrome's Side Panel and Offscreen APIs. No build step or package installation is required.
+
+## Set Up Casting
+
+Casting uses a small companion page because the Google Cast Web Sender SDK must not be loaded as remote code inside the extension. The companion page is in `docs/cast`.
+
+1. Enable GitHub Pages for this repository using **Settings → Pages → Deploy from a branch**, selecting the default branch and the `/docs` folder.
+2. Reload the unpacked extension from `src` in `chrome://extensions`.
+3. Start a station and select **Cast to speaker** in the side panel. On the companion page, use the Cast button to select a speaker.
+
+The companion page needs an HTTPS origin matching `https://shoopity.github.io`. GitHub Pages changes can take several minutes to publish. After the speaker confirms playback, the extension pauses its local player. The companion tab remains open for the duration of the Cast session. Direct streams must be publicly reachable by the speaker and use a format supported by the Google Cast default media receiver; not all stations or podcast feeds will work.
 
 ## Use
 
@@ -58,6 +69,7 @@ The feed must contain RSS `item` entries with playable audio enclosure URLs. A f
 - `storage`: saves stations and feeds with Chrome Sync and keeps panel preferences and podcast playback progress locally.
 - Radio Browser host access: used for station searches.
 - Optional HTTP/HTTPS host access: requested for feed fetching and station track metadata. Chrome may prompt the first time a host is used. Audio playback can work even when track metadata is unavailable.
+- External messaging is limited to the GitHub Pages Cast companion page and is used only to pause local playback after casting starts.
 
 Saved station and feed entries are synchronized through Chrome Sync. Panel layout preferences, the last podcast feed, and podcast playback position are stored locally. The extension does not require a radio streaming account.
 
@@ -76,3 +88,4 @@ Saved station and feed entries are synchronized through Chrome Sync. Panel layou
 - `src/background.js`: extension service worker and offscreen playback coordination.
 - `src/offscreen.html` and `src/offscreen.js`: audio playback, podcast queue, and progress tracking.
 - `src/metadata.js`: Icecast and ICY track metadata detection.
+- `docs/cast/`: HTTPS companion page for Google Cast device discovery and playback.

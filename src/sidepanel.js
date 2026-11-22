@@ -50,6 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const nowPlayingFull = document.getElementById('nowPlayingFull');
   const playbackVolume = document.getElementById('playbackVolume');
   const playbackVolumeValue = document.getElementById('playbackVolumeValue');
+  const castBtn = document.getElementById('castBtn');
   const metadataWatcher = RadioMetadata.createWatcher((text) => {
     nowPlaying.textContent = text;
     nowPlayingFull.textContent = text;
@@ -76,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
       seekPreview.hidden = true;
     }
     playback = state;
+    castBtn.disabled = !state.url;
     const active = ['loading', 'playing'].includes(state.status);
     stopBtn.style.visibility = active ? 'visible' : 'hidden';
     stopBtn.disabled = !active;
@@ -162,6 +164,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   stopBtn.addEventListener('click', () => command('stop'));
   pauseBtn.addEventListener('click', () => command('pause'));
+  castBtn.addEventListener('click', () => {
+    const params = new URLSearchParams({
+      extensionId: chrome.runtime.id,
+      url: playback.url,
+      name: playback.name,
+      kind: playback.kind || 'live'
+    });
+    chrome.tabs.create({
+      url: `https://shoopity.github.io/ChromeExt_InternetRadioPlayer/cast/?${params}`
+    }).catch((error) => {
+      playbackStatus.textContent = `Unable to open Cast controls: ${error.message}`;
+    });
+  });
   function playAdjacentEpisode(index) {
     if (!Array.isArray(playback.queue) || !playback.feedUrl) return;
     command('playQueue', {
