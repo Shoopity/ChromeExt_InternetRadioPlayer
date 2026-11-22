@@ -39,9 +39,9 @@
     #episodeList li { gap: 10px; }
     .is-playing { background: #edf8f0; }
     .is-loading { background: #fff8e6; }
-    .section[data-section-id="playback"] { box-sizing: border-box; height: 280px; min-height: 280px; max-height: 280px; flex: 0 0 280px; overflow: visible; }
+    .section[data-section-id="playback"] { box-sizing: border-box; height: 312px; min-height: 312px; max-height: 312px; flex: 0 0 312px; overflow: visible; }
     .section[data-section-id="playback"] > .section-header { height: 26px; }
-    .playback-section { box-sizing: border-box; height: calc(100% - 36px); display: grid; grid-template-rows: 40px 64px 24px 30px 30px; gap: 6px; margin-top: 10px; }
+    .playback-section { box-sizing: border-box; height: calc(100% - 36px); display: grid; grid-template-rows: 40px 64px 24px 30px 62px; gap: 6px; margin-top: 10px; }
     .playback-summary, .playback-heading { display: flex; align-items: flex-start; min-width: 0; }
     .playback-heading { width: 100%; gap: 8px; }
     .playback-hover-text { position: relative; flex: 1; min-width: 0; outline-offset: 2px; }
@@ -59,6 +59,11 @@
     .volume-controls { display: flex; align-items: center; gap: 8px; min-width: 0; color: #444; font-size: 12px; }
     .volume-controls input { flex: 1; min-width: 0; padding: 0; }
     .volume-controls output { width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+    .cast-controls { min-width: 0; }
+    .cast-controls > button { width: 100%; height: 30px; }
+    .cast-help { margin: 4px 0 0; color: #555; font-size: 11px; line-height: 1.35; }
+    .cast-help strong { color: #222; }
+    .cast-help-icon { display: inline-grid; place-items: center; width: 16px; height: 16px; margin: 0 3px 0 0; border: 1px solid #68727f; border-radius: 3px; vertical-align: -3px; font-size: 10px; }
     .seek-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 8px; }
     .seek-slider-wrap { position: relative; grid-column: 1; min-width: 0; padding-top: 24px; }
     .seek-controls input { width: 100%; min-width: 0; padding: 0; }
@@ -132,7 +137,14 @@
             <button id="stopBtn" type="button" aria-hidden="true" disabled style="visibility: hidden">■ Stop</button>
           </div>
         </div>
-        <button id="castBtn" type="button" disabled title="Play a station on a Google Cast device">Cast to speaker</button>
+        <div class="cast-controls">
+          <button id="castBtn" type="button" disabled title="Play a station on a Google Cast device">Cast to speaker</button>
+          <p id="castHelp" class="cast-help" hidden>
+            <span class="cast-help-icon" aria-hidden="true">▶</span>
+            <strong>Control your cast:</strong> select Chrome's
+            <strong>Control your music, video, and more</strong> icon in the upper-right toolbar.
+          </p>
+        </div>
       </div>
     </section>
 

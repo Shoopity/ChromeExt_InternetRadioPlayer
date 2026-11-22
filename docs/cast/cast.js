@@ -5,6 +5,7 @@ const extensionId = params.get('extensionId') || '';
 const stationKind = params.get('kind') || 'live';
 const status = document.getElementById('status');
 const station = document.getElementById('station');
+const castHelp = document.getElementById('castHelp');
 let castInitialized = false;
 
 function isHttpUrl(value) {
@@ -49,6 +50,12 @@ function initializeCast() {
 }
 
 async function onSessionStateChanged(event) {
+  if (event.sessionState === cast.framework.SessionState.SESSION_ENDED) {
+    status.textContent = 'The Cast session has ended.';
+    if (castHelp) castHelp.hidden = true;
+    await notifyCastState(false).catch(() => {});
+    return;
+  }
   if (event.sessionState !== cast.framework.SessionState.SESSION_STARTED &&
       event.sessionState !== cast.framework.SessionState.SESSION_RESUMED) return;
   if (!isHttpUrl(stationUrl)) {
@@ -69,10 +76,21 @@ async function onSessionStateChanged(event) {
     }
     await event.session.loadMedia(request);
     status.textContent = `Casting ${stationName}. Use the speaker or this browser to control playback.`;
+    if (castHelp) castHelp.hidden = false;
+    await notifyCastState(true);
     await pauseLocalPlayer();
   } catch (error) {
     status.textContent = `Could not start this stream on the speaker: ${error.message}`;
   }
+}
+
+async function notifyCastState(active) {
+  if (!extensionId || !chrome.runtime?.sendMessage) return;
+  const response = await chrome.runtime.sendMessage(extensionId, {
+    action: 'castState',
+    active
+  });
+  if (response?.error) throw new Error(response.error);
 }
 
 function getContentType(value) {

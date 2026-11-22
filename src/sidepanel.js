@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const playbackVolume = document.getElementById('playbackVolume');
   const playbackVolumeValue = document.getElementById('playbackVolumeValue');
   const castBtn = document.getElementById('castBtn');
+  const castHelp = document.getElementById('castHelp');
   const metadataWatcher = RadioMetadata.createWatcher((text) => {
     nowPlaying.textContent = text;
     nowPlayingFull.textContent = text;
@@ -149,7 +150,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   chrome.runtime.onMessage.addListener((message) => {
     if (message.target === 'panel' && message.action === 'playbackState') updatePlayback(message.state);
+    if (message.target === 'panel' && message.action === 'castState') {
+      castHelp.hidden = !message.active;
+    }
   });
+
+  chrome.storage.local.get('castActive').then((result) => {
+    castHelp.hidden = result.castActive !== true;
+  }).catch(() => {});
 
   async function command(action, station = {}) {
     try {

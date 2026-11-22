@@ -10,6 +10,8 @@
     #station { overflow-wrap: anywhere; color: #444; }
     #status { min-height: 1.5em; color: #444; }
     google-cast-launcher { display: block; width: 64px; height: 64px; margin: 20px 0; cursor: pointer; }
+    #castHelp { padding: 10px 12px; border: 1px solid #d7dfdc; border-radius: 6px; background: #f3f8f5; color: #444; font-size: 14px; }
+    #castHelp strong { color: #222; }
   </style>
   <script>
     window.__onGCastApiAvailable = (available) => {
@@ -25,6 +27,9 @@
     <p id="station"></p>
     <p>Choose a Google Cast speaker using the button below. Keep this tab open while listening.</p>
     <google-cast-launcher aria-label="Choose a Google Cast speaker"></google-cast-launcher>
+    <p id="castHelp" hidden>
+      <strong>Control your cast:</strong> select Chrome's <strong>Control your music, video, and more</strong> icon in the upper-right toolbar.
+    </p>
     <p id="status" role="status" aria-live="polite">Connecting to Google Cast…</p>
   </main>
   <script src="./cast.js"></script>

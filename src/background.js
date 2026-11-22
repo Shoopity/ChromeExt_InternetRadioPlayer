@@ -47,8 +47,22 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
     return;
   }
   if (senderUrl.origin !== 'https://shoopity.github.io' ||
-      !senderUrl.pathname.startsWith('/ChromeExt_InternetRadioPlayer/cast/') ||
-      message.action !== 'pauseLocalForCast') return;
+      !senderUrl.pathname.startsWith('/ChromeExt_InternetRadioPlayer/cast/')) return;
+
+  if (message.action === 'castState') {
+    const active = message.active === true;
+    chrome.storage.local.set({ castActive: active }).then(() => {
+      chrome.runtime.sendMessage({
+        target: 'panel',
+        action: 'castState',
+        active
+      }).catch(() => {});
+      sendResponse({ ok: true });
+    }, (error) => sendResponse({ error: error.message }));
+    return true;
+  }
+
+  if (message.action !== 'pauseLocalForCast') return;
 
   const operation = commands.then(async () => {
     const contexts = await chrome.runtime.getContexts({
