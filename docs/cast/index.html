@@ -11,6 +11,7 @@
     #status { min-height: 1.5em; color: #444; }
     google-cast-launcher { display: block; width: 64px; height: 64px; margin: 20px 0; cursor: pointer; }
     google-cast-launcher[hidden] { display: none; }
+    #fallbackCastBtn { margin: 12px 0 4px; padding: 8px 12px; }
     #castHelp { padding: 10px 12px; border: 1px solid #d7dfdc; border-radius: 6px; background: #f3f8f5; color: #444; font-size: 14px; }
     #castHelp strong { color: #222; }
   </style>
@@ -28,6 +29,7 @@
     <p id="station"></p>
     <p id="pickerPrompt">Opening the local Cast device picker…</p>
     <google-cast-launcher id="castLauncher" aria-label="Choose a Google Cast speaker" hidden></google-cast-launcher>
+    <button id="fallbackCastBtn" type="button" hidden>Choose Cast device</button>
     <p id="castHelp" hidden>
       <strong>Control your cast:</strong> select Chrome's <strong>Control your music, video, and more</strong> icon in the upper-right toolbar.
     </p>

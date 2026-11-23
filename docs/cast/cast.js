@@ -34,8 +34,31 @@ function onCastApiAvailable(available) {
 function showLauncherFallback() {
   const prompt = document.getElementById('pickerPrompt');
   const launcher = document.getElementById('castLauncher');
+  const fallbackButton = document.getElementById('fallbackCastBtn');
   if (prompt) prompt.textContent = 'Select the Cast icon to choose a speaker.';
   if (launcher) launcher.hidden = false;
+  if (fallbackButton) fallbackButton.hidden = false;
+}
+
+document.getElementById('fallbackCastBtn').addEventListener('click', () => {
+  const context = cast.framework.CastContext.getInstance();
+  pickerRequested = true;
+  context.requestSession().catch((error) => {
+    const code = error?.code || error?.message || error;
+    status.textContent = `Could not open the Cast device picker: ${describeCastError(code)}.`;
+  });
+});
+
+function describeCastError(error) {
+  const code = typeof error === 'string' ? error : error?.code;
+  switch (code) {
+    case 'cancel': return 'device selection was canceled';
+    case 'session_error': return 'no Cast session could be started';
+    case 'receiver_unavailable': return 'no compatible Cast receiver was found';
+    case 'timeout': return 'the device request timed out';
+    case 'channel_error': return 'Chrome could not communicate with the receiver';
+    default: return code ? String(code) : 'an unknown Cast error occurred';
+  }
 }
 
 window.addEventListener('cast-api-available', () => onCastApiAvailable(window.castApiAvailable));
@@ -79,7 +102,8 @@ async function requestCastSession() {
     window.clearTimeout(fallbackTimer);
     pickerRequested = false;
     showLauncherFallback();
-    status.textContent = `Automatic device selection was unavailable: ${error.message || error}`;
+    const code = error?.code || error?.message || error;
+    status.textContent = `Automatic device selection was unavailable: ${describeCastError(code)}.`;
   }
 }
 
