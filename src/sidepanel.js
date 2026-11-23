@@ -179,8 +179,12 @@ document.addEventListener('DOMContentLoaded', () => {
       name: playback.name,
       kind: playback.kind || 'live'
     });
-    chrome.tabs.create({
-      url: `https://shoopity.github.io/ChromeExt_InternetRadioPlayer/cast/?${params}`
+    chrome.windows.create({
+      url: `https://shoopity.github.io/ChromeExt_InternetRadioPlayer/cast/?${params}`,
+      type: 'popup',
+      width: 420,
+      height: 520,
+      focused: true
     }).catch((error) => {
       playbackStatus.textContent = `Unable to open Cast controls: ${error.message}`;
     });

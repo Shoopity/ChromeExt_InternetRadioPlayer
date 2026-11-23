@@ -35,7 +35,7 @@ Casting uses a small companion page because the Google Cast Web Sender SDK must 
 
 1. Enable GitHub Pages for this repository using **Settings → Pages → Deploy from a branch**, selecting the default branch and the `/docs` folder.
 2. Reload the unpacked extension from `src` in `chrome://extensions`.
-3. Start a station and select **Cast to speaker** in the side panel. On the companion page, use the Cast button to select a speaker.
+3. Start a station and select **Cast to speaker** in the side panel. A small popup opens the local Cast device picker; select a speaker. The popup closes after playback starts.
 
 The companion page needs an HTTPS origin matching `https://shoopity.github.io`. GitHub Pages changes can take several minutes to publish. After the speaker confirms playback, the extension pauses its local player and shows a hint below **Cast to speaker** explaining that Chrome's **Control your music, video, and more** icon in the upper-right toolbar can control playback. The companion tab may be closed after casting starts. Direct streams must be publicly reachable by the speaker and use a format supported by the Google Cast default media receiver; not all stations or podcast feeds will work.
 

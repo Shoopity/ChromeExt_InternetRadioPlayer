@@ -7,6 +7,7 @@ const status = document.getElementById('status');
 const station = document.getElementById('station');
 const castHelp = document.getElementById('castHelp');
 let castInitialized = false;
+let pickerRequested = false;
 
 function isHttpUrl(value) {
   try {
@@ -45,8 +46,30 @@ function initializeCast() {
     onSessionStateChanged
   );
   status.textContent = stationUrl && isHttpUrl(stationUrl)
-    ? 'Select the Cast button to choose a speaker.'
+    ? 'Opening the local Cast device picker.'
     : 'No playable station was provided by the radio player.';
+  requestCastSession();
+}
+
+async function requestCastSession() {
+  if (pickerRequested || !stationUrl || !isHttpUrl(stationUrl)) return;
+  pickerRequested = true;
+  const prompt = document.getElementById('pickerPrompt');
+  const context = cast.framework.CastContext.getInstance();
+  const existingSession = context.getCurrentSession();
+  if (existingSession) {
+    await loadStation(existingSession);
+    return;
+  }
+  try {
+    await context.requestSession();
+  } catch (error) {
+    pickerRequested = false;
+    if (prompt) prompt.textContent = 'Choose a speaker to start casting.';
+    const launcher = document.getElementById('castLauncher');
+    if (launcher) launcher.hidden = false;
+    status.textContent = `Automatic device selection was unavailable: ${error.message || error}`;
+  }
 }
 
 async function onSessionStateChanged(event) {
@@ -58,6 +81,10 @@ async function onSessionStateChanged(event) {
   }
   if (event.sessionState !== cast.framework.SessionState.SESSION_STARTED &&
       event.sessionState !== cast.framework.SessionState.SESSION_RESUMED) return;
+  await loadStation(event.session);
+}
+
+async function loadStation(session) {
   if (!isHttpUrl(stationUrl)) {
     status.textContent = 'No valid station URL was provided. Close this tab and try again from the player.';
     return;
@@ -74,11 +101,12 @@ async function onSessionStateChanged(event) {
     if (stationKind === 'live') {
       mediaInfo.streamType = chrome.cast.media.StreamType.LIVE;
     }
-    await event.session.loadMedia(request);
+    await session.loadMedia(request);
     status.textContent = `Casting ${stationName}. Use the speaker or this browser to control playback.`;
     if (castHelp) castHelp.hidden = false;
     await notifyCastState(true);
     await pauseLocalPlayer();
+    window.setTimeout(() => window.close(), 300);
   } catch (error) {
     status.textContent = `Could not start this stream on the speaker: ${error.message}`;
   }
