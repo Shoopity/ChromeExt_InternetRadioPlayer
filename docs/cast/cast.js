@@ -25,9 +25,17 @@ station.textContent = stationUrl && isHttpUrl(stationUrl)
 function onCastApiAvailable(available) {
   if (!available) {
     status.textContent = 'Google Cast is unavailable in this browser.';
+    showLauncherFallback();
     return;
   }
   initializeCast();
+}
+
+function showLauncherFallback() {
+  const prompt = document.getElementById('pickerPrompt');
+  const launcher = document.getElementById('castLauncher');
+  if (prompt) prompt.textContent = 'Select the Cast icon to choose a speaker.';
+  if (launcher) launcher.hidden = false;
 }
 
 window.addEventListener('cast-api-available', () => onCastApiAvailable(window.castApiAvailable));
@@ -61,13 +69,16 @@ async function requestCastSession() {
     await loadStation(existingSession);
     return;
   }
+  const fallbackTimer = window.setTimeout(() => {
+    showLauncherFallback();
+  }, 1500);
   try {
     await context.requestSession();
+    window.clearTimeout(fallbackTimer);
   } catch (error) {
+    window.clearTimeout(fallbackTimer);
     pickerRequested = false;
-    if (prompt) prompt.textContent = 'Choose a speaker to start casting.';
-    const launcher = document.getElementById('castLauncher');
-    if (launcher) launcher.hidden = false;
+    showLauncherFallback();
     status.textContent = `Automatic device selection was unavailable: ${error.message || error}`;
   }
 }

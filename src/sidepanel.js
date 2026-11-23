@@ -173,14 +173,14 @@ document.addEventListener('DOMContentLoaded', () => {
   stopBtn.addEventListener('click', () => command('stop'));
   pauseBtn.addEventListener('click', () => command('pause'));
   castBtn.addEventListener('click', () => {
-    const params = new URLSearchParams({
+    const popupParams = new URLSearchParams({
       extensionId: chrome.runtime.id,
       url: playback.url,
       name: playback.name,
       kind: playback.kind || 'live'
     });
     chrome.windows.create({
-      url: `https://shoopity.github.io/ChromeExt_InternetRadioPlayer/cast/?${params}`,
+      url: `https://shoopity.github.io/ChromeExt_InternetRadioPlayer/cast/?${popupParams}`,
       type: 'popup',
       width: 420,
       height: 520,
